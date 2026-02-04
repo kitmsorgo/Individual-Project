@@ -1,0 +1,10 @@
+{
+  "L": 0.1,
+  "nx": 101,
+  "alpha": 5e-5,
+  "t_end": 200,
+  "nt": 2001,
+  "T0": 300,
+  "bc": {"type": "dirichlet_dirichlet", "left": 350, "right": 300},
+  "save_dir": "data/synthetic/"
+}

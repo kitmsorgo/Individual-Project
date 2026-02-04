@@ -1,0 +1,11 @@
+L: 0.1
+nx: 101
+alpha: 5.0e-5
+t_end: 200.0
+dt: 0.1
+T0: 300.0
+bc:
+  type: dirichlet_dirichlet
+  left: 350.0
+  right: 300.0
+save_path: "data/raw/"

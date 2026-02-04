@@ -1,0 +1,52 @@
+# ----------------------------
+# Python environment & cache
+# ----------------------------
+# Visual Studio workspace cache
+.vs/
+
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ----------------------------
+# Models & checkpoints
+# ----------------------------
+PINN/models/
+*.pt
+*.pth
+
+# ----------------------------
+# PINN Data
+# ----------------------------
+PINN/data/*.csv
+PINN/data/*.txt
+
+# ----------------------------
+# MATLAB / Heat Flux Folder
+# (Ignore entire numerical solver directory)
+# ----------------------------
+heat_flux/
+# Only ignore MATLAB files *inside* heat_flux, not globally
+heat_flux/*.m
+heat_flux/*.mat
+heat_flux/*.fig
+heat_flux/*.asv
+heat_flux/*.mlx
+
+# ----------------------------
+# VS Code Config
+# ----------------------------
+.vscode/
+
+# ----------------------------
+# OS Files
+# ----------------------------
+.DS_Store
+Thumbs.db
+
+# ----------------------------
+# Logs
+# ----------------------------
+*.log
