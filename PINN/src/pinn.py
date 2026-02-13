@@ -8,7 +8,7 @@ import torch.nn as nn
 
 
 class MLP(nn.Module):
-    def __init__(self, in_dim: int = 2, hidden: int = 128, layers: int = 8, out_dim: int = 1):
+    def __init__(self, in_dim: int = 2, hidden: int = 30, layers: int = 2, out_dim: int = 1):
         super().__init__()
         if layers < 2:
             raise ValueError("layers must be >= 2")
@@ -102,9 +102,9 @@ def compute_losses(
     theta_ic_hat = predict_theta(model, batch.xi_ic, batch.tau_ic)
     loss_ic = torch.mean((theta_ic_hat - batch.theta_ic) ** 2)
 
-    # Right BC loss
-    theta_bc_hat = predict_theta(model, batch.xi_bc, batch.tau_bc)
-    loss_bc = torch.mean((theta_bc_hat - batch.theta_bc) ** 2)
+    # Right BC loss (Neumann: flux)
+    flux_bc_hat = dtheta_dxi(model, batch.xi_bc, batch.tau_bc)
+    loss_bc = torch.mean((flux_bc_hat - batch.flux_bc) ** 2)
 
     # Optional interior data
     loss_data = torch.tensor(0.0, device=loss_pde.device)

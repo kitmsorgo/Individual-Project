@@ -19,10 +19,10 @@ class PINNBatch:
     tau_ic: torch.Tensor
     theta_ic: torch.Tensor
 
-    # Right boundary condition (xi=1)
+    # Right boundary condition (xi=1) - now flux for Neumann BC
     xi_bc: torch.Tensor
     tau_bc: torch.Tensor
-    theta_bc: torch.Tensor
+    flux_bc: torch.Tensor  # nondimensional flux
 
     # Optional interior data points
     xi_data: Optional[torch.Tensor] = None
@@ -44,7 +44,7 @@ def load_npz_dataset(npz_path: str | Path, device: torch.device) -> PINNBatch:
       xi_data, tau_data, theta_data
     """
     data = np.load(npz_path)
-    required = ["xi_r", "tau_r", "xi_ic", "tau_ic", "theta_ic", "xi_bc", "tau_bc", "theta_bc"]
+    required = ["xi_r", "tau_r", "xi_ic", "tau_ic", "theta_ic", "xi_bc", "tau_bc", "flux_bc"]
     for k in required:
         if k not in data:
             raise ValueError(f"Missing key '{k}' in {npz_path}. Found: {list(data.keys())}")
@@ -57,7 +57,7 @@ def load_npz_dataset(npz_path: str | Path, device: torch.device) -> PINNBatch:
         theta_ic=_to_tensor(data["theta_ic"], device),
         xi_bc=_to_tensor(data["xi_bc"], device),
         tau_bc=_to_tensor(data["tau_bc"], device),
-        theta_bc=_to_tensor(data["theta_bc"], device),
+        flux_bc=_to_tensor(data["flux_bc"], device),
     )
 
     if "xi_data" in data and "tau_data" in data and "theta_data" in data:
@@ -79,7 +79,7 @@ def build_synthetic_batch(
     tau_max: float,
     device: torch.device,
     ic_fn: Callable[[np.ndarray], np.ndarray],
-    bc_right_fn: Callable[[np.ndarray], np.ndarray],
+    bc_right_flux_fn: Callable[[np.ndarray], np.ndarray],  # now flux function
     n_data: int = 0,
     data_fn: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]] = None,
     seed: int = 42,
@@ -88,7 +88,7 @@ def build_synthetic_batch(
     On-the-fly sampling in nondimensional domain:
       xi in [0,1], tau in [0,tau_max]
     ic_fn: theta(xi) at tau=0
-    bc_right_fn: theta(tau) at xi=1
+    bc_right_flux_fn: flux(tau) at xi=1 (nondimensional)
     data_fn: theta(xi,tau) interior (optional) if you have synthetic "truth"
     """
     rng = np.random.default_rng(seed)
@@ -105,7 +105,7 @@ def build_synthetic_batch(
     # Right BC points (xi=1)
     xi_bc = np.ones((n_bc, 1), dtype=np.float32)
     tau_bc = sample_uniform(n_bc, 0.0, tau_max, rng)
-    theta_bc = bc_right_fn(tau_bc).astype(np.float32)
+    flux_bc = bc_right_flux_fn(tau_bc).astype(np.float32)
 
     batch = PINNBatch(
         xi_r=torch.tensor(xi_r, dtype=torch.float32, device=device),
@@ -115,7 +115,7 @@ def build_synthetic_batch(
         theta_ic=torch.tensor(theta_ic, dtype=torch.float32, device=device),
         xi_bc=torch.tensor(xi_bc, dtype=torch.float32, device=device),
         tau_bc=torch.tensor(tau_bc, dtype=torch.float32, device=device),
-        theta_bc=torch.tensor(theta_bc, dtype=torch.float32, device=device),
+        flux_bc=torch.tensor(flux_bc, dtype=torch.float32, device=device),
     )
 
     if n_data > 0:

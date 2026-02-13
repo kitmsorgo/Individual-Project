@@ -1,52 +1,55 @@
-# ----------------------------
-# Python environment & cache
-# ----------------------------
-# Visual Studio workspace cache
-.vs/
-
-venv/
+# Byte-compiled / optimized / DLL files
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
 
-# ----------------------------
-# Models & checkpoints
-# ----------------------------
-PINN/models/
+# Jupyter
+.ipynb_checkpoints
+
+# Environments
+.env
+.venv
+env/
+venv/
+
+# VS Code
+.vscode/
+
+# Python packaging
+build/
+dist/
+*.egg-info/
+
+# PyTorch / models
+checkpoints/
+models/checkpoints/
 *.pt
 *.pth
 
-# ----------------------------
-# PINN Data
-# ----------------------------
-PINN/data/*.csv
-PINN/data/*.txt
+# PINN-specific
+PINN/models/
+PINN/checkpoints/
 
-# ----------------------------
-# MATLAB / Heat Flux Folder
-# (Ignore entire numerical solver directory)
-# ----------------------------
-heat_flux/
-# Only ignore MATLAB files *inside* heat_flux, not globally
-heat_flux/*.m
-heat_flux/*.mat
-heat_flux/*.fig
-heat_flux/*.asv
-heat_flux/*.mlx
+# Data and outputs
+data/
+PINN/data/
+heatflux/data/
+*.npz
+*.mat
 
-# ----------------------------
-# VS Code Config
-# ----------------------------
-.vscode/
+# MATLAB / heatflux helper files
+# Ignore large/processed outputs but keep source .m files
+heatflux/processed/
+heatflux/raw/
 
-# ----------------------------
-# OS Files
-# ----------------------------
+# System files
 .DS_Store
 Thumbs.db
 
-# ----------------------------
 # Logs
-# ----------------------------
 *.log
+
+# Temporary files
+*.swp
+*.tmp
+

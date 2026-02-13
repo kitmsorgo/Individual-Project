@@ -1,0 +1,92 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\wscm13\\Desktop\\heatflux\\heatflux\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\wscm13\\Desktop\\heatflux\\heatflux\\src\\testRun.m||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:src\\testRun.m||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\wscm13\\Desktop\\heatflux\\heatflux\\src\\heat1D_forward.m||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:src\\heat1D_forward.m||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\wscm13\\Desktop\\heatflux\\heatflux\\src\\generate_data_MATLAB.m||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:src\\generate_data_MATLAB.m||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\wscm13\\Desktop\\heatflux\\heatflux\\src\\generate_data.py||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:src\\generate_data.py||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 1,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{40ea2e6b-2121-4bb8-a43e-c83c04b51041}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "testRun.m",
+              "DocumentMoniker": "C:\\Users\\wscm13\\Desktop\\heatflux\\heatflux\\src\\testRun.m",
+              "RelativeDocumentMoniker": "src\\testRun.m",
+              "ToolTip": "C:\\Users\\wscm13\\Desktop\\heatflux\\heatflux\\src\\testRun.m",
+              "RelativeToolTip": "src\\testRun.m",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABkAAAAAAAAAAAAAAA==",
+              "Icon": "00000000-0000-0000-0000-000000000000.000000|iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAJ/SURBVDhPlZNbSBRRGMe/c5kzO6uUopiBbeuDmhVsqZGKoBsUJVERFj5kWkjkg1EEUtBDDyFFRiTkgy8ahQ9BF5\u002ByEjepCM0Qse0Cmnmp1TR3M5d2dy6ns\u002BNgWW7QDz7mnPP9/39mhvMh\u002BI2Se/0JRLGdogQdYARnSAQHJIIGGSV3QLG13nSlBi3pApzzxYDc216HLPPHwpwpTCCqn1LawSh8lwjJFmF5os62bHG0WxaThYDzHG/aMPBUmAuFyGAE1Xbv3thk9iwqHk7GpYV76/f0NW5N8/X1TqHA6bxmUM2A7LaX2zEmjyhGQCm\u002B9mq/66Tp\u002BoPhSnuNc62jKRhSwxNDw1nr78IojjbCmrFL1QxQdYOrHBpM9TJw1Xg3O\u002BvvmYyQ8bbD9zOiZ2iiOqHBl5h5NEiVRInrkXS/90E47C9Pb4WQ6YpB5YuRSzfynWewYlfK8uzzicVsGgrlWZaclLzX0OVtli4mEQ6eit5RNwYO5mcsghAYiEvWLia\u002B8MdOTYN9S83/wRO3W4sYehLmyJi3zkx\u002BaIahR/gna/tPdI2vwXMz346PToxfvRVI6bkQyoET9nJUVNwVb2liUuLxUE3Xs35d5eueeFlFgwRjp7hQU7JMiqarC4es7iIDOyBu5eq4Gm9qvqsnvdS9ZBakK92bAfPnIkARszBFJXro67GCTqtt8qFKqXU6nI1I/OyRIPcvCYhCL3tKgKJ2EbCCUcwlijtkittkDG8pJbY6b/25I\u002Bz9zqjxS2Bu7K8AkwbPOkZRi5iLfBEC0RJr85k7NwB1Y81GSmjmMw0FXi8fEEUMmJzwrJQxVCWGq0AErBJvNckk3CUzctF7MOcNAMBP5uDYaH96PHwAAAAASUVORK5CYII=",
+              "WhenOpened": "2025-11-11T16:56:42.988Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "heat1D_forward.m",
+              "DocumentMoniker": "C:\\Users\\wscm13\\Desktop\\heatflux\\heatflux\\src\\heat1D_forward.m",
+              "RelativeDocumentMoniker": "src\\heat1D_forward.m",
+              "ToolTip": "C:\\Users\\wscm13\\Desktop\\heatflux\\heatflux\\src\\heat1D_forward.m",
+              "RelativeToolTip": "src\\heat1D_forward.m",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAgAAAAxAAAAAAAAAA==",
+              "Icon": "00000000-0000-0000-0000-000000000000.000000|iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAJ/SURBVDhPlZNbSBRRGMe/c5kzO6uUopiBbeuDmhVsqZGKoBsUJVERFj5kWkjkg1EEUtBDDyFFRiTkgy8ahQ9BF5\u002ByEjepCM0Qse0Cmnmp1TR3M5d2dy6ns\u002BNgWW7QDz7mnPP9/39mhvMh\u002BI2Se/0JRLGdogQdYARnSAQHJIIGGSV3QLG13nSlBi3pApzzxYDc216HLPPHwpwpTCCqn1LawSh8lwjJFmF5os62bHG0WxaThYDzHG/aMPBUmAuFyGAE1Xbv3thk9iwqHk7GpYV76/f0NW5N8/X1TqHA6bxmUM2A7LaX2zEmjyhGQCm\u002B9mq/66Tp\u002BoPhSnuNc62jKRhSwxNDw1nr78IojjbCmrFL1QxQdYOrHBpM9TJw1Xg3O\u002BvvmYyQ8bbD9zOiZ2iiOqHBl5h5NEiVRInrkXS/90E47C9Pb4WQ6YpB5YuRSzfynWewYlfK8uzzicVsGgrlWZaclLzX0OVtli4mEQ6eit5RNwYO5mcsghAYiEvWLia\u002B8MdOTYN9S83/wRO3W4sYehLmyJi3zkx\u002BaIahR/gna/tPdI2vwXMz346PToxfvRVI6bkQyoET9nJUVNwVb2liUuLxUE3Xs35d5eueeFlFgwRjp7hQU7JMiqarC4es7iIDOyBu5eq4Gm9qvqsnvdS9ZBakK92bAfPnIkARszBFJXro67GCTqtt8qFKqXU6nI1I/OyRIPcvCYhCL3tKgKJ2EbCCUcwlijtkittkDG8pJbY6b/25I\u002Bz9zqjxS2Bu7K8AkwbPOkZRi5iLfBEC0RJr85k7NwB1Y81GSmjmMw0FXi8fEEUMmJzwrJQxVCWGq0AErBJvNckk3CUzctF7MOcNAMBP5uDYaH96PHwAAAAASUVORK5CYII=",
+              "WhenOpened": "2025-11-11T16:26:40.437Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "generate_data_MATLAB.m",
+              "DocumentMoniker": "C:\\Users\\wscm13\\Desktop\\heatflux\\heatflux\\src\\generate_data_MATLAB.m",
+              "RelativeDocumentMoniker": "src\\generate_data_MATLAB.m",
+              "ToolTip": "C:\\Users\\wscm13\\Desktop\\heatflux\\heatflux\\src\\generate_data_MATLAB.m",
+              "RelativeToolTip": "src\\generate_data_MATLAB.m",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABAAAAAMAAAAAAAAAA==",
+              "Icon": "00000000-0000-0000-0000-000000000000.000000|iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAJ/SURBVDhPlZNbSBRRGMe/c5kzO6uUopiBbeuDmhVsqZGKoBsUJVERFj5kWkjkg1EEUtBDDyFFRiTkgy8ahQ9BF5\u002ByEjepCM0Qse0Cmnmp1TR3M5d2dy6ns\u002BNgWW7QDz7mnPP9/39mhvMh\u002BI2Se/0JRLGdogQdYARnSAQHJIIGGSV3QLG13nSlBi3pApzzxYDc216HLPPHwpwpTCCqn1LawSh8lwjJFmF5os62bHG0WxaThYDzHG/aMPBUmAuFyGAE1Xbv3thk9iwqHk7GpYV76/f0NW5N8/X1TqHA6bxmUM2A7LaX2zEmjyhGQCm\u002B9mq/66Tp\u002BoPhSnuNc62jKRhSwxNDw1nr78IojjbCmrFL1QxQdYOrHBpM9TJw1Xg3O\u002BvvmYyQ8bbD9zOiZ2iiOqHBl5h5NEiVRInrkXS/90E47C9Pb4WQ6YpB5YuRSzfynWewYlfK8uzzicVsGgrlWZaclLzX0OVtli4mEQ6eit5RNwYO5mcsghAYiEvWLia\u002B8MdOTYN9S83/wRO3W4sYehLmyJi3zkx\u002BaIahR/gna/tPdI2vwXMz346PToxfvRVI6bkQyoET9nJUVNwVb2liUuLxUE3Xs35d5eueeFlFgwRjp7hQU7JMiqarC4es7iIDOyBu5eq4Gm9qvqsnvdS9ZBakK92bAfPnIkARszBFJXro67GCTqtt8qFKqXU6nI1I/OyRIPcvCYhCL3tKgKJ2EbCCUcwlijtkittkDG8pJbY6b/25I\u002Bz9zqjxS2Bu7K8AkwbPOkZRi5iLfBEC0RJr85k7NwB1Y81GSmjmMw0FXi8fEEUMmJzwrJQxVCWGq0AErBJvNckk3CUzctF7MOcNAMBP5uDYaH96PHwAAAAASUVORK5CYII=",
+              "WhenOpened": "2025-11-11T15:08:42.83Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "generate_data.py",
+              "DocumentMoniker": "C:\\Users\\wscm13\\Desktop\\heatflux\\heatflux\\src\\generate_data.py",
+              "RelativeDocumentMoniker": "src\\generate_data.py",
+              "ToolTip": "C:\\Users\\wscm13\\Desktop\\heatflux\\heatflux\\src\\generate_data.py",
+              "RelativeToolTip": "src\\generate_data.py",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAYAAABGAAAAAAAAAA==",
+              "Icon": "00000000-0000-0000-0000-000000000000.000000|iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAHeSURBVDhPpVMxa1NRFP7ebZLSlgaltNpSVCySRUxL0NAh4FJpHWpxcZAUBEPG/AKHDsVBN5eGrCnoYKCDoDiUCKKBjtZBUZtJ2ojYJr40ue\u002B\u002B47k3VzD0hQr94OOed8853/k47z2cCETk2NAgk8mQDQMhhFjK5/Mb9vEotIDruoEsFovEzVvZbPaWLTcQ9uxCpVLp4l\u002Bk0\u002BlEPB5/wIPm7RVC9uxCMpm0UTdKpRKi0WiCQy3wUt8FCvw7VSNxbRapG4voDwucGgyjXC7bzH84ePt1HysbH/GhWoNstzA1OoSFhZuxQqFg8sfu4FutAd\u002BT8KSEYm7v7GJ0YnLClgYLaAcjU9N4Vx9Dda8OBz7OjwywSNsIXY39vEL7TxWpxv2eO3hWHUZ19xc8ti25UdvXzdpNWH0BDj8JiLOrPXfweOu9mRgRhOXUEPr7IiBfYeacB9HaBNRvQH4f6\u002BlgMERwGxJP7grEoq9shj9Uz\u002BVGpmIi4vXcwdzlcePgzLAuZPiSGw869Jg\u002Biw1Mvw50oLGcuoh71y8h1HwB1Js8UfFLnwScNnBhdYVLWsy1IwK5XM5GHaw9uu0LeSCMddZA32lz7zjOQxMcByK1SPU3O/Rjnai2fkjNz8/5L77TyQJ/AJc67LNf3QeWAAAAAElFTkSuQmCC",
+              "WhenOpened": "2025-11-11T15:08:35.748Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
