@@ -12,33 +12,56 @@ such as `xi_r`, `tau_r`, `xi_ic`, `tau_ic`, `theta_ic`, etc.
 """
 
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Sequence
 
 import torch
 import torch.nn as nn
 
 
 class MLP(nn.Module):
-    def __init__(self, in_dim: int = 2, hidden: int = 30, layers: int = 2, out_dim: int = 1):
-        super().__init__()
-        if layers < 2:
-            raise ValueError("layers must be >= 2")
+    def __init__(
+        self,
+        in_dim: int = 2,
+        hidden: Sequence[int] | int = 30,
+        layers: int = 2,
+        out_dim: int = 1,
+    ):
+        """Flexible fully-connected MLP with Tanh activations.
 
-        """Simple fully-connected MLP with Tanh activations.
-
-        Architecture: Linear(in_dim -> hidden) + Tanh + (layers-2) * [Linear(hidden->hidden)+Tanh]
-        + Linear(hidden->out_dim).
+        Two ways to specify the architecture:
+        - `hidden` as an int and `layers` as number of layers (>=2):
+            creates [in_dim -> hidden] + (layers-2) * [hidden -> hidden] + [hidden -> out_dim]
+        - `hidden` as a sequence of ints: each entry specifies the number of neurons
+            in that hidden layer, e.g. `hidden=[64, 64, 32]` builds
+            in_dim->64->64->32->out_dim. When `hidden` is a sequence, `layers` is ignored.
         """
+        super().__init__()
 
-        net = []
-        net.append(nn.Linear(in_dim, hidden))
+        # Build list of hidden layer sizes
+        if isinstance(hidden, (list, tuple)):
+            sizes = list(hidden)
+            if len(sizes) < 1:
+                raise ValueError("hidden sequence must contain at least one layer size")
+        else:
+            # integer hidden size + number of layers
+            if layers < 2:
+                raise ValueError("layers must be >= 2 when `hidden` is an int")
+            # first hidden layer + (layers-2) intermediate hidden layers
+            sizes = [int(hidden)] * (layers - 1)
+
+        # Assemble nn.Sequential: in_dim -> sizes[0] -> ... -> sizes[-1] -> out_dim
+        net: list[nn.Module] = []
+        # first layer
+        net.append(nn.Linear(in_dim, sizes[0]))
         net.append(nn.Tanh())
 
-        for _ in range(layers - 2):
-            net.append(nn.Linear(hidden, hidden))
+        # intermediate hidden layers
+        for prev, curr in zip(sizes[:-1], sizes[1:]):
+            net.append(nn.Linear(prev, curr))
             net.append(nn.Tanh())
 
-        net.append(nn.Linear(hidden, out_dim))
+        # final linear to output
+        net.append(nn.Linear(sizes[-1], out_dim))
         self.net = nn.Sequential(*net)
 
         self._init_weights()
