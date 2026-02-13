@@ -1,5 +1,16 @@
 from __future__ import annotations
 
+"""PINN model utilities.
+
+This module provides a lightweight fully-connected MLP used as the neural
+approximation for the PINN, helpers to compute derivatives via autograd, the
+PDE residual for a nondimensional 1D heat equation, and the aggregate loss
+computation used by training scripts.
+
+The functions expect a `batch` object (from `src.data`) providing tensors
+such as `xi_r`, `tau_r`, `xi_ic`, `tau_ic`, `theta_ic`, etc.
+"""
+
 from dataclasses import dataclass
 from typing import Dict, Optional, Tuple
 
@@ -12,6 +23,12 @@ class MLP(nn.Module):
         super().__init__()
         if layers < 2:
             raise ValueError("layers must be >= 2")
+
+        """Simple fully-connected MLP with Tanh activations.
+
+        Architecture: Linear(in_dim -> hidden) + Tanh + (layers-2) * [Linear(hidden->hidden)+Tanh]
+        + Linear(hidden->out_dim).
+        """
 
         net = []
         net.append(nn.Linear(in_dim, hidden))
@@ -33,10 +50,21 @@ class MLP(nn.Module):
                 nn.init.zeros_(m.bias)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass.
+
+        Inputs:
+        - `x`: tensor shaped (N, in_dim) containing concatenated spatial and temporal inputs.
+
+        Returns predicted scalar field (N, out_dim).
+        """
         return self.net(x)
 
 
 def _grad(outputs: torch.Tensor, inputs: torch.Tensor) -> torch.Tensor:
+    """Compute gradient of `outputs` w.r.t. `inputs` using PyTorch autograd.
+
+    Returns tensor with same shape as `inputs` representing d(outputs)/d(inputs).
+    """
     return torch.autograd.grad(
         outputs=outputs,
         inputs=inputs,
@@ -60,16 +88,20 @@ def pde_residual_theta_tau_minus_theta_xx(model: nn.Module, xi: torch.Tensor, ta
     Residual for nondimensional 1D heat equation:
       theta_tau - theta_xi_xi = 0
     """
+    # Ensure inputs require grad so derivatives can be computed
     xi = xi.clone().detach().requires_grad_(True)
     tau = tau.clone().detach().requires_grad_(True)
 
+    # Concatenate spatial and temporal coordinates and evaluate network
     X = torch.cat([xi, tau], dim=1)
     theta = model(X)
 
+    # Compute derivatives using autograd helpers
     theta_tau = _grad(theta, tau)
     theta_xi = _grad(theta, xi)
     theta_xixi = _grad(theta_xi, xi)
 
+    # Residual R = theta_tau - theta_xi_xi
     return theta_tau - theta_xixi
 
 
@@ -79,6 +111,7 @@ def predict_theta(model: nn.Module, xi: torch.Tensor, tau: torch.Tensor) -> torc
 
 
 def dtheta_dxi(model: nn.Module, xi: torch.Tensor, tau: torch.Tensor) -> torch.Tensor:
+    # Compute first derivative of theta with respect to xi
     xi = xi.clone().detach().requires_grad_(True)
     tau = tau.clone().detach().requires_grad_(True)
     theta = model(torch.cat([xi, tau], dim=1))
@@ -94,24 +127,25 @@ def compute_losses(
     """
     batch is PINNBatch from src.data
     """
-    # PDE residual loss
+    # PDE residual loss (enforce PDE at collocation points)
     r = pde_residual_theta_tau_minus_theta_xx(model, batch.xi_r, batch.tau_r)
     loss_pde = torch.mean(r**2)
 
-    # IC loss
+    # Initial condition loss (theta predicted vs. given at tau=0)
     theta_ic_hat = predict_theta(model, batch.xi_ic, batch.tau_ic)
     loss_ic = torch.mean((theta_ic_hat - batch.theta_ic) ** 2)
 
-    # Right BC loss (Neumann: flux)
+    # Right boundary condition (Neumann flux) loss
     flux_bc_hat = dtheta_dxi(model, batch.xi_bc, batch.tau_bc)
     loss_bc = torch.mean((flux_bc_hat - batch.flux_bc) ** 2)
 
-    # Optional interior data
+    # Optional interior data loss (if available)
     loss_data = torch.tensor(0.0, device=loss_pde.device)
     if batch.xi_data is not None and batch.tau_data is not None and batch.theta_data is not None:
         theta_data_hat = predict_theta(model, batch.xi_data, batch.tau_data)
         loss_data = torch.mean((theta_data_hat - batch.theta_data) ** 2)
 
+    # Weighted total loss used for training
     total = (
         weights.w_pde * loss_pde
         + weights.w_ic * loss_ic
