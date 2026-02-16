@@ -104,7 +104,7 @@ def compute_losses_eval(
     model: nn.Module,
     batch: Any,
     weights: LossWeights,
-    flux_mode: str = "fixed",
+    flux_mode: str = "known",
     flux_cfg: FluxLearnedConfig | None = None,
 ) -> Tuple[torch.Tensor, Dict[str, float]]:
     """Evaluate losses while keeping autograd enabled.
@@ -119,11 +119,45 @@ def compute_losses_eval(
     return loss, out_logs
 
 
+def _normalize_flux_mode(flux_mode: str) -> str:
+    mode = str(flux_mode).lower()
+    if mode not in {"known", "unknown"}:
+        raise ValueError(f"Invalid flux_mode '{flux_mode}'. Expected 'known' or 'unknown'.")
+    return mode
+
+
+def _collect_trainable_params(
+    model: nn.Module,
+    flux_mode: str,
+    flux_cfg: FluxLearnedConfig | None,
+    extra_params: list[nn.Parameter] | None,
+) -> list[nn.Parameter]:
+    params = list(model.parameters())
+    mode = _normalize_flux_mode(flux_mode)
+    if mode == "unknown":
+        if flux_cfg is None:
+            raise ValueError("flux_mode='unknown' requires flux_cfg.")
+        params.append(flux_cfg.q_ctrl)
+    if extra_params:
+        params.extend(list(extra_params))
+
+    # de-duplicate while preserving order
+    unique: list[nn.Parameter] = []
+    seen: set[int] = set()
+    for p in params:
+        pid = id(p)
+        if pid in seen:
+            continue
+        seen.add(pid)
+        unique.append(p)
+    return unique
+
+
 def train_adam(
     model: nn.Module,
     batch: Any,
     weights: LossWeights,
-    flux_mode: str = "fixed",
+    flux_mode: str = "known",
     flux_cfg: FluxLearnedConfig | None = None,
     extra_params: list[nn.Parameter] | None = None,
     log_callback: Callable[[Dict[str, float | int | str | None]], None] | None = None,
@@ -131,7 +165,7 @@ def train_adam(
     lr: float = 1e-3,
     steps: int | None = None,
     print_every: int = 200,
-    run_dir: str | Path = "checkpoints/run",
+    run_dir: str | Path = "models/checkpoints/run",
     case_id: str | None = None,
     val_batch: Any | None = None,
     keep_best_k: int = 0,
@@ -188,9 +222,8 @@ def train_adam(
     )
 
     _init_loss_csv(loss_csv)
-    params = list(model.parameters())
-    if extra_params:
-        params = params + list(extra_params)
+    flux_mode = _normalize_flux_mode(flux_mode)
+    params = _collect_trainable_params(model, flux_mode, flux_cfg, extra_params)
     opt = torch.optim.Adam(params, lr=lr)
 
     # Backward compatibility: if `steps` is passed, treat it as max_steps.
@@ -362,7 +395,7 @@ def train_lbfgs(
     model: nn.Module,
     batch: Any,
     weights: LossWeights,
-    flux_mode: str = "fixed",
+    flux_mode: str = "known",
     flux_cfg: FluxLearnedConfig | None = None,
     extra_params: list[nn.Parameter] | None = None,
     log_callback: Callable[[Dict[str, float | int | str | None]], None] | None = None,
@@ -370,7 +403,7 @@ def train_lbfgs(
     max_iter: int = 2000,
     history_size: int = 50,
     lr: float = 1.0,
-    run_dir: str | Path = "checkpoints/run",
+    run_dir: str | Path = "models/checkpoints/run",
     case_id: str | None = None,
     val_batch: Any | None = None,
 ) -> Path:
@@ -399,9 +432,8 @@ def train_lbfgs(
     )
 
     _init_loss_csv(loss_csv)
-    params = list(model.parameters())
-    if extra_params:
-        params = params + list(extra_params)
+    flux_mode = _normalize_flux_mode(flux_mode)
+    params = _collect_trainable_params(model, flux_mode, flux_cfg, extra_params)
     opt = torch.optim.LBFGS(
         params,
         lr=lr,

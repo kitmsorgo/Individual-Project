@@ -39,11 +39,11 @@ def recover_flux_vs_tau(
     tau_vals: np.ndarray,
     device: torch.device,
     scales: Scales,
-    xi0: float = 0.0,
+    xi0: float = 1.0,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Returns (tau_vals, q_flux) where:
-      q_flux = -k*(dT/L)*dtheta/dxi at xi=0
+      q_flux = -k*(dT/L)*dtheta/dxi at xi=1 (right boundary by default)
     """
     tau_t = torch.tensor(tau_vals.reshape(-1, 1), dtype=torch.float32, device=device)
     xi_t = torch.full_like(tau_t, float(xi0), dtype=torch.float32, device=device)

@@ -108,7 +108,7 @@ class LossWeights:
 
 @dataclass
 class FluxLearnedConfig:
-    """Configuration for learned nondimensional flux q_hat(tau)."""
+    """Configuration for unknown nondimensional flux q_hat(tau)."""
     tau_knots: torch.Tensor
     q_ctrl: torch.nn.Parameter
     lambda_smooth: float = 0.0
@@ -165,7 +165,10 @@ def pde_residual_theta_tau_minus_theta_xx(model: nn.Module, xi: torch.Tensor, ta
     theta_xixi = _grad(theta_xi, xi)
 
     # Residual R = theta_tau - theta_xi_xi
-    return theta_tau - theta_xixi
+    r = theta_tau - theta_xixi
+    if r.shape != xi.shape:
+        raise AssertionError(f"PDE residual shape mismatch: {r.shape} vs xi {xi.shape}")
+    return r
 
 
 def predict_theta(model: nn.Module, xi: torch.Tensor, tau: torch.Tensor) -> torch.Tensor:
@@ -186,12 +189,17 @@ def compute_losses(
     model: nn.Module,
     batch,
     weights: LossWeights,
-    flux_mode: str = "fixed",
+    flux_mode: str = "known",
     flux_cfg: Optional[FluxLearnedConfig] = None,
 ) -> Tuple[torch.Tensor, Dict[str, float]]:
     """
     batch is PINNBatch from src.data
     """
+    # Validate flux API.
+    flux_mode = str(flux_mode).lower()
+    if flux_mode not in {"known", "unknown"}:
+        raise ValueError(f"Invalid flux_mode '{flux_mode}'. Expected 'known' or 'unknown'.")
+
     # PDE residual loss (enforce PDE at collocation points)
     r = pde_residual_theta_tau_minus_theta_xx(model, batch.xi_r, batch.tau_r)
     loss_pde = torch.mean(r**2)
@@ -203,16 +211,25 @@ def compute_losses(
     # Right boundary condition (Neumann flux) loss
     theta_xi = dtheta_dxi(model, batch.xi_bc, batch.tau_bc)
     loss_smooth = torch.tensor(0.0, device=loss_pde.device)
-    if flux_mode == "learned":
+    if flux_mode == "unknown":
         if flux_cfg is None:
-            raise ValueError("flux_mode='learned' requires flux_cfg with tau_knots and q_ctrl.")
+            raise ValueError("flux_mode='unknown' requires flux_cfg with tau_knots and q_ctrl.")
+        # In unknown mode, we must not leak known/manifest flux values into training.
+        if getattr(batch, "flux_bc", None) is not None:
+            raise AssertionError(
+                "Unknown-flux mode forbids batch.flux_bc. Build batch with flux_bc=None to avoid leakage."
+            )
         q_hat = interp1d_linear(flux_cfg.tau_knots, flux_cfg.q_ctrl, batch.tau_bc)
         bc_residual = theta_xi + q_hat
         loss_bc = torch.mean(bc_residual**2)
-        if flux_cfg.q_ctrl.numel() > 1 and flux_cfg.lambda_smooth > 0.0:
-            dq = flux_cfg.q_ctrl[1:] - flux_cfg.q_ctrl[:-1]
-            loss_smooth = torch.mean(dq**2)
+        # Smooth unknown q_hat via second difference regularization.
+        if flux_cfg.q_ctrl.numel() > 2 and flux_cfg.lambda_smooth > 0.0:
+            q = flux_cfg.q_ctrl.reshape(-1)
+            d2q = q[2:] - 2.0 * q[1:-1] + q[:-2]
+            loss_smooth = torch.mean(d2q**2)
     else:
+        if getattr(batch, "flux_bc", None) is None:
+            raise AssertionError("Known-flux mode requires batch.flux_bc.")
         flux_bc_hat = theta_xi
         loss_bc = torch.mean((flux_bc_hat - batch.flux_bc) ** 2)
 
@@ -229,8 +246,10 @@ def compute_losses(
         + weights.w_bc * loss_bc
         + weights.w_data * loss_data
     )
-    if flux_mode == "learned" and flux_cfg is not None and flux_cfg.lambda_smooth > 0.0:
+    if flux_mode == "unknown" and flux_cfg is not None and flux_cfg.lambda_smooth > 0.0:
         total = total + flux_cfg.lambda_smooth * loss_smooth
+    if not torch.isfinite(total):
+        raise AssertionError("Total loss is not finite.")
 
     logs = {
         "total": float(total.detach().cpu().item()),
