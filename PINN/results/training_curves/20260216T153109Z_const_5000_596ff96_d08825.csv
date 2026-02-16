@@ -1,0 +1,1 @@
+step,stage,total_loss,pde_loss,bc_loss,ic_loss,data_loss,grad_norm,learning_rate,time_elapsed_s

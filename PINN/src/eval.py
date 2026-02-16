@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 
 from .utils import ensure_dir, Scales, save_json
-from .pinn import dtheta_dxi, predict_theta
+from .pinn import dtheta_dxi, predict_theta, FluxLearnedConfig, interp1d_linear
 
 
 def load_model_weights(model: nn.Module, ckpt_path: str | Path, device: torch.device) -> None:
@@ -65,3 +65,15 @@ def save_theta_grid_npz(out_path: str | Path, tau: np.ndarray, xi: np.ndarray, t
     out_path = Path(out_path)
     ensure_dir(out_path.parent)
     np.savez(out_path, tau=tau, xi=xi, theta=theta)
+
+
+@torch.no_grad()
+def predict_q_hat(
+    tau_vals: np.ndarray,
+    flux_cfg: FluxLearnedConfig,
+    device: torch.device,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Predict learned nondimensional flux q_hat(tau) on a grid."""
+    tau_t = torch.tensor(tau_vals.reshape(-1, 1), dtype=torch.float32, device=device)
+    q_hat = interp1d_linear(flux_cfg.tau_knots, flux_cfg.q_ctrl, tau_t)
+    return tau_vals, q_hat.detach().cpu().numpy().reshape(-1)

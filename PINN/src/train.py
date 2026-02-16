@@ -15,13 +15,13 @@ import math
 import time
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, Callable
 
 import torch
 import torch.nn as nn
 
 from .utils import ensure_dir, save_json
-from .pinn import LossWeights, compute_losses
+from .pinn import LossWeights, FluxLearnedConfig, compute_losses
 
 CSV_COLUMNS = [
     "step",
@@ -104,6 +104,8 @@ def compute_losses_eval(
     model: nn.Module,
     batch: Any,
     weights: LossWeights,
+    flux_mode: str = "fixed",
+    flux_cfg: FluxLearnedConfig | None = None,
 ) -> Tuple[torch.Tensor, Dict[str, float]]:
     """Evaluate losses while keeping autograd enabled.
 
@@ -112,7 +114,7 @@ def compute_losses_eval(
     scalar log values.
     """
     # Keep autograd enabled: PINN residual terms may require derivatives at eval time.
-    loss, logs = compute_losses(model, batch, weights)
+    loss, logs = compute_losses(model, batch, weights, flux_mode=flux_mode, flux_cfg=flux_cfg)
     out_logs = {k: float(v) for k, v in logs.items()}
     return loss, out_logs
 
@@ -121,6 +123,11 @@ def train_adam(
     model: nn.Module,
     batch: Any,
     weights: LossWeights,
+    flux_mode: str = "fixed",
+    flux_cfg: FluxLearnedConfig | None = None,
+    extra_params: list[nn.Parameter] | None = None,
+    log_callback: Callable[[Dict[str, float | int | str | None]], None] | None = None,
+    log_every: int = 1,
     lr: float = 1e-3,
     steps: int | None = None,
     print_every: int = 200,
@@ -181,7 +188,10 @@ def train_adam(
     )
 
     _init_loss_csv(loss_csv)
-    opt = torch.optim.Adam(model.parameters(), lr=lr)
+    params = list(model.parameters())
+    if extra_params:
+        params = params + list(extra_params)
+    opt = torch.optim.Adam(params, lr=lr)
 
     # Backward compatibility: if `steps` is passed, treat it as max_steps.
     if steps is not None:
@@ -202,7 +212,9 @@ def train_adam(
     for step in range(1, max_steps + 1):
         # Standard Adam iteration
         opt.zero_grad(set_to_none=True)
-        loss, train_logs = compute_losses_eval(model, batch, weights)
+        loss, train_logs = compute_losses_eval(
+            model, batch, weights, flux_mode=flux_mode, flux_cfg=flux_cfg
+        )
         loss.backward()
         grad_norm = _grad_norm(model)
         opt.step()
@@ -223,7 +235,9 @@ def train_adam(
 
         eval_now = use_val_controller and (step % eval_every == 0 or step == 1)
         if eval_now:
-            _, val_logs = compute_losses_eval(model, val_batch, weights)
+            _, val_logs = compute_losses_eval(
+                model, val_batch, weights, flux_mode=flux_mode, flux_cfg=flux_cfg
+            )
             val_data_mse = float(val_logs.get("data", math.nan))
             val_rmse_data = _rmse_from_mse(val_data_mse)
             gen_gap = val_rmse_data - train_data_rmse
@@ -310,6 +324,25 @@ def train_adam(
                 print(f"[Adam] stopping at step {step}: {stop_reason}")
                 break
 
+        if log_callback is not None and (step % max(1, int(log_every)) == 0):
+            try:
+                log_callback(
+                    {
+                        "step": step,
+                        "stage": "adam",
+                        "total_loss": float(row.get("total", math.nan)),
+                        "pde_loss": float(row.get("pde", math.nan)),
+                        "bc_loss": float(row.get("bc", math.nan)),
+                        "ic_loss": float(row.get("ic", math.nan)),
+                        "data_loss": float(row.get("data", math.nan)),
+                        "grad_norm": float(row.get("grad_norm", math.nan)),
+                        "learning_rate": float(lr),
+                        "time_elapsed_s": float(elapsed_s),
+                    }
+                )
+            except Exception as exc:
+                print(f"[train_adam] log_callback failed: {exc}")
+
         if step % print_every == 0 or step == max_steps:
             _save_checkpoint(last_path, model)
 
@@ -329,6 +362,11 @@ def train_lbfgs(
     model: nn.Module,
     batch: Any,
     weights: LossWeights,
+    flux_mode: str = "fixed",
+    flux_cfg: FluxLearnedConfig | None = None,
+    extra_params: list[nn.Parameter] | None = None,
+    log_callback: Callable[[Dict[str, float | int | str | None]], None] | None = None,
+    log_every: int = 1,
     max_iter: int = 2000,
     history_size: int = 50,
     lr: float = 1.0,
@@ -361,18 +399,44 @@ def train_lbfgs(
     )
 
     _init_loss_csv(loss_csv)
+    params = list(model.parameters())
+    if extra_params:
+        params = params + list(extra_params)
     opt = torch.optim.LBFGS(
-        model.parameters(),
+        params,
         lr=lr,
         max_iter=max_iter,
         history_size=history_size,
         line_search_fn="strong_wolfe",
     )
 
+    closure_calls = 0
+
     def closure() -> torch.Tensor:
+        nonlocal closure_calls
         opt.zero_grad(set_to_none=True)
-        loss, _ = compute_losses(model, batch, weights)
+        loss, _ = compute_losses(model, batch, weights, flux_mode=flux_mode, flux_cfg=flux_cfg)
         loss.backward()
+        closure_calls += 1
+        if log_callback is not None and (closure_calls % max(1, int(log_every)) == 0):
+            try:
+                grad_norm = _grad_norm(model)
+                log_callback(
+                    {
+                        "step": closure_calls,
+                        "stage": "lbfgs",
+                        "total_loss": float(loss.detach().cpu().item()),
+                        "pde_loss": math.nan,
+                        "bc_loss": math.nan,
+                        "ic_loss": math.nan,
+                        "data_loss": math.nan,
+                        "grad_norm": float(grad_norm),
+                        "learning_rate": "",
+                        "time_elapsed_s": float(time.time() - t0),
+                    }
+                )
+            except Exception as exc:
+                print(f"[train_lbfgs] log_callback failed: {exc}")
         return loss
 
     print("[LBFGS] starting...")
@@ -382,7 +446,9 @@ def train_lbfgs(
     # Final evaluation is done with autograd available: PINN residual terms may require derivatives.
     # Evaluate final loss and gradient norm for logging
     model.zero_grad(set_to_none=True)
-    total, train_logs = compute_losses_eval(model, batch, weights)
+    total, train_logs = compute_losses_eval(
+        model, batch, weights, flux_mode=flux_mode, flux_cfg=flux_cfg
+    )
     total.backward()
     grad_norm = _grad_norm(model)
 
@@ -399,7 +465,9 @@ def train_lbfgs(
     }
 
     if val_batch is not None:
-        _, val_logs = compute_losses_eval(model, val_batch, weights)
+        _, val_logs = compute_losses_eval(
+            model, val_batch, weights, flux_mode=flux_mode, flux_cfg=flux_cfg
+        )
         row.update(
             {
                 "val_total": val_logs.get("total", math.nan),
