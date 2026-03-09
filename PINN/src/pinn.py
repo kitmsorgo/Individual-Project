@@ -146,7 +146,7 @@ def interp1d_linear(
     return y.reshape(-1, 1)
 
 
-def pde_residual_theta_tau_minus_theta_xx(model: nn.Module, xi: torch.Tensor, tau: torch.Tensor) -> torch.Tensor:
+def pde_residual_theta_tau_minus_theta_xx(model: nn.Module, xi: torch.Tensor, tau: torch.Tensor, mu: Optional[torch.Tensor] = None) -> torch.Tensor:
     """
     Residual for nondimensional 1D heat equation:
       theta_tau - theta_xi_xi = 0
@@ -157,6 +157,9 @@ def pde_residual_theta_tau_minus_theta_xx(model: nn.Module, xi: torch.Tensor, ta
 
     # Concatenate spatial and temporal coordinates and evaluate network
     X = torch.cat([xi, tau], dim=1)
+    if mu is not None:
+        mu = mu.clone().detach().requires_grad_(False)  # mu does not require grad for PDE
+        X = torch.cat([X, mu], dim=1)
     theta = model(X)
 
     # Compute derivatives using autograd helpers
@@ -171,16 +174,22 @@ def pde_residual_theta_tau_minus_theta_xx(model: nn.Module, xi: torch.Tensor, ta
     return r
 
 
-def predict_theta(model: nn.Module, xi: torch.Tensor, tau: torch.Tensor) -> torch.Tensor:
+def predict_theta(model: nn.Module, xi: torch.Tensor, tau: torch.Tensor, mu: Optional[torch.Tensor] = None) -> torch.Tensor:
     X = torch.cat([xi, tau], dim=1)
+    if mu is not None:
+        X = torch.cat([X, mu], dim=1)
     return model(X)
 
 
-def dtheta_dxi(model: nn.Module, xi: torch.Tensor, tau: torch.Tensor) -> torch.Tensor:
+def dtheta_dxi(model: nn.Module, xi: torch.Tensor, tau: torch.Tensor, mu: Optional[torch.Tensor] = None) -> torch.Tensor:
     # Compute first derivative of theta with respect to xi
     xi = xi.clone().detach().requires_grad_(True)
     tau = tau.clone().detach().requires_grad_(True)
-    theta = model(torch.cat([xi, tau], dim=1))
+    X = torch.cat([xi, tau], dim=1)
+    if mu is not None:
+        mu = mu.clone().detach().requires_grad_(False)
+        X = torch.cat([X, mu], dim=1)
+    theta = model(X)
     theta_xi = _grad(theta, xi)
     return theta_xi
 
@@ -201,15 +210,18 @@ def compute_losses(
         raise ValueError(f"Invalid flux_mode '{flux_mode}'. Expected 'known' or 'unknown'.")
 
     # PDE residual loss (enforce PDE at collocation points)
-    r = pde_residual_theta_tau_minus_theta_xx(model, batch.xi_r, batch.tau_r)
-    loss_pde = torch.mean(r**2)
+    mu_r = getattr(batch, "mu_r", None)
+    r = pde_residual_theta_tau_minus_theta_xx(model, batch.xi_r, batch.tau_r, mu_r)
+    loss_pde = torch.mean(r**2) if batch.xi_r.numel() > 0 else torch.tensor(0.0, device=loss_pde.device)
 
     # Initial condition loss (theta predicted vs. given at tau=0)
-    theta_ic_hat = predict_theta(model, batch.xi_ic, batch.tau_ic)
-    loss_ic = torch.mean((theta_ic_hat - batch.theta_ic) ** 2)
+    mu_ic = getattr(batch, "mu_ic", None)
+    theta_ic_hat = predict_theta(model, batch.xi_ic, batch.tau_ic, mu_ic)
+    loss_ic = torch.mean((theta_ic_hat - batch.theta_ic) ** 2) if batch.xi_ic.numel() > 0 else torch.tensor(0.0, device=loss_pde.device)
 
     # Right boundary condition (Neumann flux) loss
-    theta_xi = dtheta_dxi(model, batch.xi_bc, batch.tau_bc)
+    mu_bc = getattr(batch, "mu_bc", None)
+    theta_xi = dtheta_dxi(model, batch.xi_bc, batch.tau_bc, mu_bc)
     loss_smooth = torch.tensor(0.0, device=loss_pde.device)
     if flux_mode == "unknown":
         if flux_cfg is None:
@@ -221,7 +233,7 @@ def compute_losses(
             )
         q_hat = interp1d_linear(flux_cfg.tau_knots, flux_cfg.q_ctrl, batch.tau_bc)
         bc_residual = theta_xi + q_hat
-        loss_bc = torch.mean(bc_residual**2)
+        loss_bc = torch.mean(bc_residual**2) if batch.xi_bc.numel() > 0 else torch.tensor(0.0, device=loss_pde.device)
         # Smooth unknown q_hat via second difference regularization.
         if flux_cfg.q_ctrl.numel() > 2 and flux_cfg.lambda_smooth > 0.0:
             q = flux_cfg.q_ctrl.reshape(-1)
@@ -231,13 +243,14 @@ def compute_losses(
         if getattr(batch, "flux_bc", None) is None:
             raise AssertionError("Known-flux mode requires batch.flux_bc.")
         flux_bc_hat = theta_xi
-        loss_bc = torch.mean((flux_bc_hat - batch.flux_bc) ** 2)
+        loss_bc = torch.mean((flux_bc_hat - batch.flux_bc) ** 2) if batch.xi_bc.numel() > 0 else torch.tensor(0.0, device=loss_pde.device)
 
     # Optional interior data loss (if available)
     loss_data = torch.tensor(0.0, device=loss_pde.device)
     if batch.xi_data is not None and batch.tau_data is not None and batch.theta_data is not None:
-        theta_data_hat = predict_theta(model, batch.xi_data, batch.tau_data)
-        loss_data = torch.mean((theta_data_hat - batch.theta_data) ** 2)
+        mu_data = getattr(batch, "mu_data", None)
+        theta_data_hat = predict_theta(model, batch.xi_data, batch.tau_data, mu_data)
+        loss_data = torch.mean((theta_data_hat - batch.theta_data) ** 2) if batch.xi_data.numel() > 0 else torch.tensor(0.0, device=loss_pde.device)
 
     # Weighted total loss used for training
     total = (
@@ -249,6 +262,11 @@ def compute_losses(
     if flux_mode == "unknown" and flux_cfg is not None and flux_cfg.lambda_smooth > 0.0:
         total = total + flux_cfg.lambda_smooth * loss_smooth
     if not torch.isfinite(total):
+        print(f"Total loss not finite: {total.item()}")
+        print(f"loss_pde: {loss_pde.item()}")
+        print(f"loss_ic: {loss_ic.item()}")
+        print(f"loss_bc: {loss_bc.item()}")
+        print(f"loss_data: {loss_data.item()}")
         raise AssertionError("Total loss is not finite.")
 
     logs = {
