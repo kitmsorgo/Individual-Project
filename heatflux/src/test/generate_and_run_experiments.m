@@ -8,7 +8,7 @@ function generate_and_run_experiments()
 %   - save raw data & metadata
 %   - write manifest.csv
     this_file = mfilename('fullpath');
-    project_root = fileparts(this_file);
+    project_root = fileparts(fileparts(this_file));  % heatflux/src/test -> heatflux/src -> heatflux
     addpath(genpath(project_root));
 
     C = experiment_config();

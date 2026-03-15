@@ -252,12 +252,16 @@ def compute_losses(
     )
     loss_pde = torch.mean(r**2) if batch.xi_r.numel() > 0 else torch.tensor(0.0, device=device)
 
-    # Left boundary condition loss (enforce theta = 0 at xi=0)
-    if weights.w_bc != 0.0:
+    # Left boundary condition loss (enforce theta at xi=0).
+    # In the nondimensionalization used by the dataset, the left boundary is typically
+    # fixed at 0 (theta = 0), but this can be overridden by providing `batch.theta_bc`.
+    if weights.w_bc != 0.0 and batch.xi_bc.numel() > 0:
         mu_bc = getattr(batch, "mu_bc", None)
-        with torch.no_grad():
-            theta_bc_hat = predict_theta(model, batch.xi_bc, batch.tau_bc, mu_bc)
-            loss_bc = torch.mean((theta_bc_hat - torch.zeros_like(theta_bc_hat)) ** 2) if batch.xi_bc.numel() > 0 else torch.tensor(0.0, device=device)
+        theta_bc_target = getattr(batch, "theta_bc", None)
+        theta_bc_hat = predict_theta(model, batch.xi_bc, batch.tau_bc, mu_bc)
+        if theta_bc_target is None:
+            theta_bc_target = torch.zeros_like(theta_bc_hat)
+        loss_bc = torch.mean((theta_bc_hat - theta_bc_target) ** 2)
     else:
         loss_bc = torch.tensor(0.0, device=device)
 

@@ -53,6 +53,7 @@ class ParamPINNBatch:
     bc_time_scale: torch.Tensor
     bc_flux_scale: torch.Tensor
     flux_bc: torch.Tensor
+    theta_bc: torch.Tensor
 
     # Optional interior data points
     xi_data: torch.Tensor
