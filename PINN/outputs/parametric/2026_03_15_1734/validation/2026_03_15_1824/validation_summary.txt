@@ -1,0 +1,24 @@
+Validation Summary
+==================
+Model checkpoint: c:\Users\wscm13\OneDrive - Loughborough University\Part C\IDP\Individual Project\PINN\outputs\parametric\2026_03_15_1734\{RUN_ID}_best.pt
+Number of validation cases: 14
+Mean RMSE: 4.473203e-01
+Std RMSE: 7.139585e-01
+Min RMSE: 4.167107e-03
+Max RMSE: 2.113638e+00
+
+Per-case RMSE:
+const_6000: 6.175826e-03
+const_12000: 6.178608e-03
+const_14000: 6.178659e-03
+const_20000: 6.178010e-03
+sine_A5000_T50: 4.167107e-03
+sine_A7500_T75: 5.573722e-01
+sine_A7500_T125: 4.365332e-01
+sine_A7500_T25: 2.113638e+00
+sine_A12500_T75: 5.573606e-01
+sine_A12500_T125: 4.365344e-01
+sine_A12500_T25: 2.113637e+00
+const_10000_Tleft_280: 6.176846e-03
+const_10000_Tleft_300: 6.176846e-03
+const_10000_Tleft_310: 6.176846e-03
