@@ -33,6 +33,10 @@ models/checkpoints/
 PINN/models/
 PINN/checkpoints/
 
+# Ensure notebooks in ignored PINN folders can still be tracked
+!PINN/models/**/*.ipynb
+!PINN/models/*.ipynb
+
 # Data and outputs
 data/
 PINN/data/

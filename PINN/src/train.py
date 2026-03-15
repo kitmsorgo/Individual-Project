@@ -169,7 +169,7 @@ def train_adam(
     case_id: str | None = None,
     val_batch: Any | None = None,
     keep_best_k: int = 0,
-    eval_every: int = 100,
+    eval_every: int = 500,
     max_steps: int = 20000,
     min_steps: int = 200,
     patience_evals: int = 8,

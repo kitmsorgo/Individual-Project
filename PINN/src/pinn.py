@@ -156,10 +156,7 @@ def pde_residual_theta_tau_minus_theta_xx(model: nn.Module, xi: torch.Tensor, ta
     tau = tau.clone().detach().requires_grad_(True)
 
     # Concatenate spatial and temporal coordinates and evaluate network
-    X = torch.cat([xi, tau], dim=1)
-    if mu is not None:
-        mu = mu.clone().detach().requires_grad_(False)  # mu does not require grad for PDE
-        X = torch.cat([X, mu], dim=1)
+    X = _stack_input(xi, tau, mu)
     theta = model(X)
 
     # Compute derivatives using autograd helpers
@@ -175,20 +172,22 @@ def pde_residual_theta_tau_minus_theta_xx(model: nn.Module, xi: torch.Tensor, ta
 
 
 def predict_theta(model: nn.Module, xi: torch.Tensor, tau: torch.Tensor, mu: Optional[torch.Tensor] = None) -> torch.Tensor:
+    X = _stack_input(xi, tau, mu)
+    return model(X)
+
+
+def _stack_input(xi: torch.Tensor, tau: torch.Tensor, mu: Optional[torch.Tensor]) -> torch.Tensor:
     X = torch.cat([xi, tau], dim=1)
     if mu is not None:
         X = torch.cat([X, mu], dim=1)
-    return model(X)
+    return X
 
 
 def dtheta_dxi(model: nn.Module, xi: torch.Tensor, tau: torch.Tensor, mu: Optional[torch.Tensor] = None) -> torch.Tensor:
     # Compute first derivative of theta with respect to xi
     xi = xi.clone().detach().requires_grad_(True)
     tau = tau.clone().detach().requires_grad_(True)
-    X = torch.cat([xi, tau], dim=1)
-    if mu is not None:
-        mu = mu.clone().detach().requires_grad_(False)
-        X = torch.cat([X, mu], dim=1)
+    X = _stack_input(xi, tau, mu)
     theta = model(X)
     theta_xi = _grad(theta, xi)
     return theta_xi
@@ -219,31 +218,10 @@ def compute_losses(
     theta_ic_hat = predict_theta(model, batch.xi_ic, batch.tau_ic, mu_ic)
     loss_ic = torch.mean((theta_ic_hat - batch.theta_ic) ** 2) if batch.xi_ic.numel() > 0 else torch.tensor(0.0, device=loss_pde.device)
 
-    # Right boundary condition (Neumann flux) loss
+    # Left boundary condition loss (enforce theta = 0 at xi=0)
     mu_bc = getattr(batch, "mu_bc", None)
-    theta_xi = dtheta_dxi(model, batch.xi_bc, batch.tau_bc, mu_bc)
-    loss_smooth = torch.tensor(0.0, device=loss_pde.device)
-    if flux_mode == "unknown":
-        if flux_cfg is None:
-            raise ValueError("flux_mode='unknown' requires flux_cfg with tau_knots and q_ctrl.")
-        # In unknown mode, we must not leak known/manifest flux values into training.
-        if getattr(batch, "flux_bc", None) is not None:
-            raise AssertionError(
-                "Unknown-flux mode forbids batch.flux_bc. Build batch with flux_bc=None to avoid leakage."
-            )
-        q_hat = interp1d_linear(flux_cfg.tau_knots, flux_cfg.q_ctrl, batch.tau_bc)
-        bc_residual = theta_xi + q_hat
-        loss_bc = torch.mean(bc_residual**2) if batch.xi_bc.numel() > 0 else torch.tensor(0.0, device=loss_pde.device)
-        # Smooth unknown q_hat via second difference regularization.
-        if flux_cfg.q_ctrl.numel() > 2 and flux_cfg.lambda_smooth > 0.0:
-            q = flux_cfg.q_ctrl.reshape(-1)
-            d2q = q[2:] - 2.0 * q[1:-1] + q[:-2]
-            loss_smooth = torch.mean(d2q**2)
-    else:
-        if getattr(batch, "flux_bc", None) is None:
-            raise AssertionError("Known-flux mode requires batch.flux_bc.")
-        flux_bc_hat = theta_xi
-        loss_bc = torch.mean((flux_bc_hat - batch.flux_bc) ** 2) if batch.xi_bc.numel() > 0 else torch.tensor(0.0, device=loss_pde.device)
+    theta_bc_hat = predict_theta(model, batch.xi_bc, batch.tau_bc, mu_bc)
+    loss_bc = torch.mean((theta_bc_hat - torch.zeros_like(theta_bc_hat)) ** 2) if batch.xi_bc.numel() > 0 else torch.tensor(0.0, device=loss_pde.device)
 
     # Optional interior data loss (if available)
     loss_data = torch.tensor(0.0, device=loss_pde.device)
@@ -259,8 +237,6 @@ def compute_losses(
         + weights.w_bc * loss_bc
         + weights.w_data * loss_data
     )
-    if flux_mode == "unknown" and flux_cfg is not None and flux_cfg.lambda_smooth > 0.0:
-        total = total + flux_cfg.lambda_smooth * loss_smooth
     if not torch.isfinite(total):
         print(f"Total loss not finite: {total.item()}")
         print(f"loss_pde: {loss_pde.item()}")
@@ -275,6 +251,6 @@ def compute_losses(
         "ic": float(loss_ic.detach().cpu().item()),
         "bc": float(loss_bc.detach().cpu().item()),
         "data": float(loss_data.detach().cpu().item()),
-        "smooth": float(loss_smooth.detach().cpu().item()),
+        "smooth": 0.0,
     }
     return total, logs

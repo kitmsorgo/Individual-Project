@@ -33,6 +33,34 @@ class PINNBatch:
     theta_data: Optional[torch.Tensor] = None
 
 
+@dataclass
+class ParamPINNBatch:
+    # Collocation (PDE residual)
+    xi_r: torch.Tensor
+    tau_r: torch.Tensor
+    mu_r: torch.Tensor
+
+    # Initial condition (tau=0)
+    xi_ic: torch.Tensor
+    tau_ic: torch.Tensor
+    mu_ic: torch.Tensor
+    theta_ic: torch.Tensor
+
+    # Right boundary condition (xi=1) - now flux for Neumann BC
+    xi_bc: torch.Tensor
+    tau_bc: torch.Tensor
+    mu_bc: torch.Tensor
+    bc_time_scale: torch.Tensor
+    bc_flux_scale: torch.Tensor
+    flux_bc: torch.Tensor
+
+    # Optional interior data points
+    xi_data: torch.Tensor
+    tau_data: torch.Tensor
+    mu_data: torch.Tensor
+    theta_data: torch.Tensor
+
+
 def _to_tensor(x: np.ndarray, device: torch.device) -> torch.Tensor:
     return torch.tensor(x, dtype=torch.float32, device=device)
 
