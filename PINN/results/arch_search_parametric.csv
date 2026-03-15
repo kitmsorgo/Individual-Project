@@ -1,0 +1,1 @@
+timestamp,git_commit,seed,n_layers,n_neurons,activation,optimizer,epochs,lr,n_colloc,n_boundary,n_initial,n_data,loss_total,loss_pde,loss_ic,loss_bc,loss_data,val_rmse_data,val_pde_loss
