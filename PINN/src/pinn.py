@@ -83,10 +83,14 @@ class MLP(nn.Module):
         return self.net(x)
 
 
-def _grad(outputs: torch.Tensor, inputs: torch.Tensor) -> torch.Tensor:
+def _grad(outputs: torch.Tensor, inputs: torch.Tensor, create_graph: bool = True, retain_graph: bool = True) -> torch.Tensor:
     """Compute gradient of `outputs` w.r.t. `inputs` using PyTorch autograd.
 
     Returns tensor with same shape as `inputs` representing d(outputs)/d(inputs).
+
+    Args:
+        create_graph: whether to create the graph for higher-order derivatives.
+        retain_graph: whether to retain the graph for further operations.
     """
     return torch.autograd.grad(
         outputs=outputs,
@@ -96,7 +100,6 @@ def _grad(outputs: torch.Tensor, inputs: torch.Tensor) -> torch.Tensor:
         retain_graph=True,
         only_inputs=True,
     )[0]
-
 
 @dataclass
 class LossWeights:
@@ -146,10 +149,19 @@ def interp1d_linear(
     return y.reshape(-1, 1)
 
 
-def pde_residual_theta_tau_minus_theta_xx(model: nn.Module, xi: torch.Tensor, tau: torch.Tensor, mu: Optional[torch.Tensor] = None) -> torch.Tensor:
+def pde_residual_theta_tau_minus_theta_xi_xx(
+    model: nn.Module,
+    xi: torch.Tensor,
+    tau: torch.Tensor,
+    mu: Optional[torch.Tensor] = None,
+    create_graph: bool = True,
+) -> torch.Tensor:
     """
     Residual for nondimensional 1D heat equation:
       theta_tau - theta_xi_xi = 0
+
+    Args:
+        create_graph: whether to build graph for higher-order derivatives.
     """
     # Ensure inputs require grad so derivatives can be computed
     xi = xi.clone().detach().requires_grad_(True)
@@ -160,9 +172,9 @@ def pde_residual_theta_tau_minus_theta_xx(model: nn.Module, xi: torch.Tensor, ta
     theta = model(X)
 
     # Compute derivatives using autograd helpers
-    theta_tau = _grad(theta, tau)
-    theta_xi = _grad(theta, xi)
-    theta_xixi = _grad(theta_xi, xi)
+    theta_tau = _grad(theta, tau, create_graph=create_graph, retain_graph=True)
+    theta_xi = _grad(theta, xi, create_graph=create_graph, retain_graph=True)
+    theta_xixi = _grad(theta_xi, xi, create_graph=create_graph, retain_graph=False)
 
     # Residual R = theta_tau - theta_xi_xi
     r = theta_tau - theta_xixi
@@ -183,13 +195,19 @@ def _stack_input(xi: torch.Tensor, tau: torch.Tensor, mu: Optional[torch.Tensor]
     return X
 
 
-def dtheta_dxi(model: nn.Module, xi: torch.Tensor, tau: torch.Tensor, mu: Optional[torch.Tensor] = None) -> torch.Tensor:
+def dtheta_dxi(
+    model: nn.Module,
+    xi: torch.Tensor,
+    tau: torch.Tensor,
+    mu: Optional[torch.Tensor] = None,
+    create_graph: bool = True,
+) -> torch.Tensor:
     # Compute first derivative of theta with respect to xi
     xi = xi.clone().detach().requires_grad_(True)
     tau = tau.clone().detach().requires_grad_(True)
     X = _stack_input(xi, tau, mu)
     theta = model(X)
-    theta_xi = _grad(theta, xi)
+    theta_xi = _grad(theta, xi, create_graph=create_graph, retain_graph=False)
     return theta_xi
 
 
@@ -199,36 +217,49 @@ def compute_losses(
     weights: LossWeights,
     flux_mode: str = "known",
     flux_cfg: Optional[FluxLearnedConfig] = None,
+    create_graph: bool = True,
 ) -> Tuple[torch.Tensor, Dict[str, float]]:
     """
     batch is PINNBatch from src.data
+
+    Args:
+        create_graph: whether to create autograd graph (set False for validation).
     """
     # Validate flux API.
     flux_mode = str(flux_mode).lower()
     if flux_mode not in {"known", "unknown"}:
         raise ValueError(f"Invalid flux_mode '{flux_mode}'. Expected 'known' or 'unknown'.")
 
-    # PDE residual loss (enforce PDE at collocation points)
-    mu_r = getattr(batch, "mu_r", None)
-    r = pde_residual_theta_tau_minus_theta_xx(model, batch.xi_r, batch.tau_r, mu_r)
-    loss_pde = torch.mean(r**2) if batch.xi_r.numel() > 0 else torch.tensor(0.0, device=loss_pde.device)
+    # Ensure we can create fallback tensors even if some inputs are empty.
+    device = getattr(batch, "xi_r", torch.tensor(0)).device
 
     # Initial condition loss (theta predicted vs. given at tau=0)
     mu_ic = getattr(batch, "mu_ic", None)
     theta_ic_hat = predict_theta(model, batch.xi_ic, batch.tau_ic, mu_ic)
-    loss_ic = torch.mean((theta_ic_hat - batch.theta_ic) ** 2) if batch.xi_ic.numel() > 0 else torch.tensor(0.0, device=loss_pde.device)
-
-    # Left boundary condition loss (enforce theta = 0 at xi=0)
-    mu_bc = getattr(batch, "mu_bc", None)
-    theta_bc_hat = predict_theta(model, batch.xi_bc, batch.tau_bc, mu_bc)
-    loss_bc = torch.mean((theta_bc_hat - torch.zeros_like(theta_bc_hat)) ** 2) if batch.xi_bc.numel() > 0 else torch.tensor(0.0, device=loss_pde.device)
+    loss_ic = torch.mean((theta_ic_hat - batch.theta_ic) ** 2) if batch.xi_ic.numel() > 0 else torch.tensor(0.0, device=device)
 
     # Optional interior data loss (if available)
-    loss_data = torch.tensor(0.0, device=loss_pde.device)
+    loss_data = torch.tensor(0.0, device=device)
     if batch.xi_data is not None and batch.tau_data is not None and batch.theta_data is not None:
         mu_data = getattr(batch, "mu_data", None)
         theta_data_hat = predict_theta(model, batch.xi_data, batch.tau_data, mu_data)
-        loss_data = torch.mean((theta_data_hat - batch.theta_data) ** 2) if batch.xi_data.numel() > 0 else torch.tensor(0.0, device=loss_pde.device)
+        loss_data = torch.mean((theta_data_hat - batch.theta_data) ** 2) if batch.xi_data.numel() > 0 else torch.tensor(0.0, device=device)
+
+    # PDE residual loss (enforce PDE at collocation points)
+    mu_r = getattr(batch, "mu_r", None)
+    r = pde_residual_theta_tau_minus_theta_xi_xx(
+        model, batch.xi_r, batch.tau_r, mu_r, create_graph=create_graph
+    )
+    loss_pde = torch.mean(r**2) if batch.xi_r.numel() > 0 else torch.tensor(0.0, device=device)
+
+    # Left boundary condition loss (enforce theta = 0 at xi=0)
+    if weights.w_bc != 0.0:
+        mu_bc = getattr(batch, "mu_bc", None)
+        with torch.no_grad():
+            theta_bc_hat = predict_theta(model, batch.xi_bc, batch.tau_bc, mu_bc)
+            loss_bc = torch.mean((theta_bc_hat - torch.zeros_like(theta_bc_hat)) ** 2) if batch.xi_bc.numel() > 0 else torch.tensor(0.0, device=device)
+    else:
+        loss_bc = torch.tensor(0.0, device=device)
 
     # Weighted total loss used for training
     total = (
@@ -249,7 +280,8 @@ def compute_losses(
         "total": float(total.detach().cpu().item()),
         "pde": float(loss_pde.detach().cpu().item()),
         "ic": float(loss_ic.detach().cpu().item()),
-        "bc": float(loss_bc.detach().cpu().item()),
+        "bc": float(loss_bc.detach().cpu().item()),  # BC loss (not optimized when w_bc=0)
+        "bc_monitor": 0.0,  # Disabled during training to avoid graph conflicts
         "data": float(loss_data.detach().cpu().item()),
         "smooth": 0.0,
     }

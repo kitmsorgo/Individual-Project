@@ -13,7 +13,7 @@ instance from `PINN/src/pinn.py`.
 import csv
 import math
 import time
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any, Dict, Tuple, Callable
 
@@ -29,6 +29,7 @@ CSV_COLUMNS = [
     "pde",
     "ic",
     "bc",
+    "bc_monitor",
     "data",
     "rmse_data",
     "grad_norm",
@@ -106,15 +107,25 @@ def compute_losses_eval(
     weights: LossWeights,
     flux_mode: str = "known",
     flux_cfg: FluxLearnedConfig | None = None,
+    create_graph: bool = True,
 ) -> Tuple[torch.Tensor, Dict[str, float]]:
     """Evaluate losses while keeping autograd enabled.
 
     For PINNs, some residual terms require computing derivatives at evaluation
     time, so we return the loss tensor (with grad history) and a dict of
     scalar log values.
+
+    The `create_graph` flag can be set to False during validation to avoid
+    retaining computational graphs when gradients are not needed.
     """
-    # Keep autograd enabled: PINN residual terms may require derivatives at eval time.
-    loss, logs = compute_losses(model, batch, weights, flux_mode=flux_mode, flux_cfg=flux_cfg)
+    loss, logs = compute_losses(
+        model,
+        batch,
+        weights,
+        flux_mode=flux_mode,
+        flux_cfg=flux_cfg,
+        create_graph=create_graph,
+    )
     out_logs = {k: float(v) for k, v in logs.items()}
     return loss, out_logs
 
@@ -176,6 +187,7 @@ def train_adam(
     plateau_window: int = 5,
     plateau_rel_tol: float = 0.01,
     pde_guardrail_rel: float = 0.10,
+    data_batch_size: int | None = None,
 ) -> Path:
     """Train `model` with Adam using validation-based convergence control.
 
@@ -213,6 +225,7 @@ def train_adam(
             "plateau_window": plateau_window,
             "plateau_rel_tol": plateau_rel_tol,
             "pde_guardrail_rel": pde_guardrail_rel,
+            "data_batch_size": data_batch_size,
             "weights": asdict(weights),
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             "keep_best_k": keep_best_k,
@@ -245,10 +258,35 @@ def train_adam(
     for step in range(1, max_steps + 1):
         # Standard Adam iteration
         opt.zero_grad(set_to_none=True)
+
+        # Subsample supervised data for runtime savings (training only)
+        batch_for_loss = batch
+        if (
+            data_batch_size is not None
+            and getattr(batch, "xi_data", None) is not None
+            and batch.xi_data.numel() > 0
+        ):
+            n_data = batch.xi_data.shape[0]
+            if n_data > data_batch_size:
+                idx = torch.randperm(n_data, device=batch.xi_data.device)[:data_batch_size]
+                batch_for_loss = replace(
+                    batch,
+                    xi_data=batch.xi_data[idx],
+                    tau_data=batch.tau_data[idx],
+                    mu_data=batch.mu_data[idx] if getattr(batch, "mu_data", None) is not None else None,
+                    theta_data=batch.theta_data[idx],
+                )
+
         loss, train_logs = compute_losses_eval(
-            model, batch, weights, flux_mode=flux_mode, flux_cfg=flux_cfg
+            model,
+            batch_for_loss,
+            weights,
+            flux_mode=flux_mode,
+            flux_cfg=flux_cfg,
+            create_graph=True,
         )
         loss.backward()
+        del loss
         grad_norm = _grad_norm(model)
         opt.step()
 
@@ -260,6 +298,7 @@ def train_adam(
             "pde": train_logs.get("pde", math.nan),
             "ic": train_logs.get("ic", math.nan),
             "bc": train_logs.get("bc", math.nan),
+            "bc_monitor": train_logs.get("bc_monitor", math.nan),
             "data": train_logs.get("data", math.nan),
             "rmse_data": train_data_rmse,
             "grad_norm": float(grad_norm),
@@ -269,7 +308,12 @@ def train_adam(
         eval_now = use_val_controller and (step % eval_every == 0 or step == 1)
         if eval_now:
             _, val_logs = compute_losses_eval(
-                model, val_batch, weights, flux_mode=flux_mode, flux_cfg=flux_cfg
+                model,
+                val_batch,
+                weights,
+                flux_mode=flux_mode,
+                flux_cfg=flux_cfg,
+                create_graph=False,
             )
             val_data_mse = float(val_logs.get("data", math.nan))
             val_rmse_data = _rmse_from_mse(val_data_mse)
