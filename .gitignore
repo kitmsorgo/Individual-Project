@@ -30,7 +30,7 @@ models/checkpoints/
 *.pth
 
 # PINN-specific
-PINN/models/
+# PINN/models/  # Uncommented to include models directory
 PINN/checkpoints/
 
 # Ensure notebooks in ignored PINN folders can still be tracked
