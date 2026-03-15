@@ -96,8 +96,8 @@ def _grad(outputs: torch.Tensor, inputs: torch.Tensor, create_graph: bool = True
         outputs=outputs,
         inputs=inputs,
         grad_outputs=torch.ones_like(outputs),
-        create_graph=True,
-        retain_graph=True,
+        create_graph=create_graph,
+        retain_graph=retain_graph,
         only_inputs=True,
     )[0]
 
@@ -174,7 +174,7 @@ def pde_residual_theta_tau_minus_theta_xi_xx(
     # Compute derivatives using autograd helpers
     theta_tau = _grad(theta, tau, create_graph=create_graph, retain_graph=True)
     theta_xi = _grad(theta, xi, create_graph=create_graph, retain_graph=True)
-    theta_xixi = _grad(theta_xi, xi, create_graph=create_graph, retain_graph=False)
+    theta_xixi = _grad(theta_xi, xi, create_graph=create_graph, retain_graph=create_graph)
 
     # Residual R = theta_tau - theta_xi_xi
     r = theta_tau - theta_xixi
@@ -207,7 +207,7 @@ def dtheta_dxi(
     tau = tau.clone().detach().requires_grad_(True)
     X = _stack_input(xi, tau, mu)
     theta = model(X)
-    theta_xi = _grad(theta, xi, create_graph=create_graph, retain_graph=False)
+    theta_xi = _grad(theta, xi, create_graph=create_graph, retain_graph=create_graph)
     return theta_xi
 
 
@@ -252,16 +252,37 @@ def compute_losses(
     )
     loss_pde = torch.mean(r**2) if batch.xi_r.numel() > 0 else torch.tensor(0.0, device=device)
 
-    # Left boundary condition loss (enforce theta at xi=0).
-    # In the nondimensionalization used by the dataset, the left boundary is typically
-    # fixed at 0 (theta = 0), but this can be overridden by providing `batch.theta_bc`.
+    # Boundary condition loss.
+    # For this 1D heat conduction scenario, the right boundary (xi=1) is typically a
+    # *flux* (Neumann) condition, while the left boundary (xi=0) is a fixed temperature
+    # (Dirichlet) condition. The dataset represents the known right‐boundary flux
+    # in `batch.flux_bc` (nondimensional theta_xi), so we enforce that when present.
+    loss_bc = torch.tensor(0.0, device=device)
     if weights.w_bc != 0.0 and batch.xi_bc.numel() > 0:
         mu_bc = getattr(batch, "mu_bc", None)
+
+        loss_dirichlet = torch.tensor(0.0, device=device)
         theta_bc_target = getattr(batch, "theta_bc", None)
-        theta_bc_hat = predict_theta(model, batch.xi_bc, batch.tau_bc, mu_bc)
-        if theta_bc_target is None:
-            theta_bc_target = torch.zeros_like(theta_bc_hat)
-        loss_bc = torch.mean((theta_bc_hat - theta_bc_target) ** 2)
+        if theta_bc_target is not None and theta_bc_target.numel() > 0:
+            theta_bc_hat = predict_theta(model, batch.xi_bc, batch.tau_bc, mu_bc)
+            # Allow masking of Dirichlet points via NaNs in theta_bc_target
+            mask = ~torch.isnan(theta_bc_target)
+            if mask.any():
+                diff = theta_bc_hat[mask] - theta_bc_target[mask]
+                loss_dirichlet = torch.mean(diff**2)
+
+        loss_neumann = torch.tensor(0.0, device=device)
+        flux_bc_target = getattr(batch, "flux_bc", None)
+        if flux_bc_target is not None and flux_bc_target.numel() > 0:
+            theta_xi_bc = dtheta_dxi(model, batch.xi_bc, batch.tau_bc, mu_bc, create_graph=create_graph)
+            # Allow masking of Neumann points via NaNs in flux_bc_target
+            mask = ~torch.isnan(flux_bc_target)
+            if mask.any():
+                diff = theta_xi_bc[mask] - flux_bc_target[mask]
+                loss_neumann = torch.mean(diff**2)
+
+        # Combine Dirichlet and Neumann contributions if both are present.
+        loss_bc = loss_dirichlet + loss_neumann
     else:
         loss_bc = torch.tensor(0.0, device=device)
 

@@ -124,7 +124,7 @@ def compute_losses_eval(
         weights,
         flux_mode=flux_mode,
         flux_cfg=flux_cfg,
-        create_graph=create_graph,
+        create_graph=True,  # Always enable graph creation for derivative computations
     )
     out_logs = {k: float(v) for k, v in logs.items()}
     return loss, out_logs
