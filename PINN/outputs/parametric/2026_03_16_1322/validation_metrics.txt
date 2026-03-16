@@ -1,0 +1,10 @@
+Validation Metrics
+==================
+total: 1.884018e-04
+pde: 4.926733e-05
+ic: 1.114713e-04
+bc: 2.572742e-05
+bc_monitor: 0.000000e+00
+data: 1.935711e-06
+smooth: 0.000000e+00
+rmse_data: 1.391298e-03

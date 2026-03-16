@@ -126,7 +126,7 @@ def pde_residual_theta_tau_minus_theta_xi_xx(
 
     theta = model(_stack_input(xi, tau, mu))
     theta_tau = _grad(theta, tau, create_graph=create_graph, retain_graph=True)
-    theta_xi = _grad(theta, xi, create_graph=create_graph, retain_graph=True)
+    theta_xi = _grad(theta, xi, create_graph=True, retain_graph=True)
     theta_xixi = _grad(theta_xi, xi, create_graph=create_graph, retain_graph=create_graph)
 
     r = theta_tau - theta_xixi
