@@ -1,22 +1,14 @@
 {
-  "optimizer": "adam",
-  "lr": 0.001,
-  "steps": null,
-  "eval_every": 500,
-  "max_steps": 20000,
-  "min_steps": 200,
-  "patience_evals": 10,
-  "plateau_window": 6,
-  "plateau_rel_tol": 0.008,
-  "pde_guardrail_rel": 0.1,
-  "data_batch_size": 5000,
+  "optimizer": "lbfgs",
+  "lr": 1.0,
+  "max_iter": 500,
+  "history_size": 50,
   "weights": {
     "w_pde": 1.0,
     "w_ic": 1.0,
     "w_bc": 1.0,
     "w_data": 1.0
   },
-  "timestamp": "2026-03-16 14:25:35",
-  "keep_best_k": 0,
-  "has_val_batch": true
+  "timestamp": "2026-03-16 14:50:01",
+  "has_val_batch": false
 }

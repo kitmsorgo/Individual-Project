@@ -50,8 +50,6 @@ class ParamPINNBatch:
     xi_bc: torch.Tensor
     tau_bc: torch.Tensor
     mu_bc: torch.Tensor
-    bc_time_scale: torch.Tensor
-    bc_flux_scale: torch.Tensor
     flux_bc: Optional[torch.Tensor] = None
     theta_bc: Optional[torch.Tensor] = None
 
@@ -230,9 +228,10 @@ def load_case_manifest_row(row: dict, root: str | Path | None = None) -> dict[st
 
     Ttau, Xxi = np.meshgrid(tau, xi, indexing="ij")
     theta_grid = theta.T  # (Nt, Nx)
-    xi_data_all = Xxi.reshape(-1, 1).astype(np.float32)
-    tau_data_all = Ttau.reshape(-1, 1).astype(np.float32)
-    theta_data_all = theta_grid.reshape(-1, 1).astype(np.float32)
+    interior_mask = (Xxi > 0.0) & (Xxi < 1.0)
+    xi_data_all = Xxi[interior_mask].reshape(-1, 1).astype(np.float32)
+    tau_data_all = Ttau[interior_mask].reshape(-1, 1).astype(np.float32)
+    theta_data_all = theta_grid[interior_mask].reshape(-1, 1).astype(np.float32)
 
     return {
         "case_id": case_id,
