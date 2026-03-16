@@ -52,14 +52,14 @@ class ParamPINNBatch:
     mu_bc: torch.Tensor
     bc_time_scale: torch.Tensor
     bc_flux_scale: torch.Tensor
-    flux_bc: torch.Tensor
-    theta_bc: torch.Tensor
+    flux_bc: Optional[torch.Tensor] = None
+    theta_bc: Optional[torch.Tensor] = None
 
     # Optional interior data points
-    xi_data: torch.Tensor
-    tau_data: torch.Tensor
-    mu_data: torch.Tensor
-    theta_data: torch.Tensor
+    xi_data: Optional[torch.Tensor] = None
+    tau_data: Optional[torch.Tensor] = None
+    mu_data: Optional[torch.Tensor] = None
+    theta_data: Optional[torch.Tensor] = None
 
 
 def _to_tensor(x: np.ndarray, device: torch.device) -> torch.Tensor:

@@ -1,0 +1,8 @@
+The model is conditioned on time-varying boundary signals through 
+𝜇
+μ, but the loss function still imposes explicit boundary constraints corresponding to fixed or otherwise mismatched Dirichlet/Neumann conditions. This creates a conflict between the parametric input and the physics loss. The conflict is mild for some cases and severe for others, leading to poor extrapolation and case-dependent failure.
+
+One correction to your wording:
+I would not say the model is failing simply because it is “testing outside of this range.” That may contribute, but it is not the main mechanism suggested by your plots. The more direct issue is loss inconsistency, not just distribution shift. Even inside the training distribution, a wrong BC term can force the solution toward the wrong manifold.
+
+The original simplified implementation was retained from an earlier formulation in which the left boundary was fixed and the right boundary flux was explicitly prescribed. After extending the model to use boundary-history conditioning, the loss function was not fully updated to reflect the new problem definition. An audit showed that the conditioning variable mu is a derived summary of the solution response rather than the true physical control input, and that the right-boundary loss remains inconsistent with this representation. The first corrective step is therefore to isolate the right-boundary mismatch rather than increase input dimensionality.

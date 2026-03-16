@@ -124,18 +124,10 @@ def compute_losses_eval(
         weights,
         flux_mode=flux_mode,
         flux_cfg=flux_cfg,
-        create_graph=True,  # Always enable graph creation for derivative computations
+        create_graph=create_graph,
     )
     out_logs = {k: float(v) for k, v in logs.items()}
     return loss, out_logs
-
-
-def _normalize_flux_mode(flux_mode: str) -> str:
-    mode = str(flux_mode).lower()
-    if mode not in {"known", "unknown"}:
-        raise ValueError(f"Invalid flux_mode '{flux_mode}'. Expected 'known' or 'unknown'.")
-    return mode
-
 
 def _collect_trainable_params(
     model: nn.Module,
@@ -144,8 +136,7 @@ def _collect_trainable_params(
     extra_params: list[nn.Parameter] | None,
 ) -> list[nn.Parameter]:
     params = list(model.parameters())
-    mode = _normalize_flux_mode(flux_mode)
-    if mode == "unknown":
+    if str(flux_mode).lower() == "unknown":
         if flux_cfg is None:
             raise ValueError("flux_mode='unknown' requires flux_cfg.")
         params.append(flux_cfg.q_ctrl)
@@ -235,7 +226,6 @@ def train_adam(
     )
 
     _init_loss_csv(loss_csv)
-    flux_mode = _normalize_flux_mode(flux_mode)
     params = _collect_trainable_params(model, flux_mode, flux_cfg, extra_params)
     opt = torch.optim.Adam(params, lr=lr)
 
@@ -476,7 +466,6 @@ def train_lbfgs(
     )
 
     _init_loss_csv(loss_csv)
-    flux_mode = _normalize_flux_mode(flux_mode)
     params = _collect_trainable_params(model, flux_mode, flux_cfg, extra_params)
     opt = torch.optim.LBFGS(
         params,

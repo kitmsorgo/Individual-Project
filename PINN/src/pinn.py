@@ -12,7 +12,7 @@ such as `xi_r`, `tau_r`, `xi_ic`, `tau_ic`, `theta_ic`, etc.
 """
 
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple, Sequence
+from typing import Dict, Optional, Sequence, Tuple
 
 import torch
 import torch.nn as nn
@@ -26,41 +26,22 @@ class MLP(nn.Module):
         layers: int = 2,
         out_dim: int = 1,
     ):
-        """Flexible fully-connected MLP with Tanh activations.
-
-        Two ways to specify the architecture:
-        - `hidden` as an int and `layers` as number of layers (>=2):
-            creates [in_dim -> hidden] + (layers-2) * [hidden -> hidden] + [hidden -> out_dim]
-        - `hidden` as a sequence of ints: each entry specifies the number of neurons
-            in that hidden layer, e.g. `hidden=[64, 64, 32]` builds
-            in_dim->64->64->32->out_dim. When `hidden` is a sequence, `layers` is ignored.
-        """
+        """Flexible fully-connected MLP with Tanh activations."""
         super().__init__()
 
-        # Build list of hidden layer sizes
         if isinstance(hidden, (list, tuple)):
             sizes = list(hidden)
             if len(sizes) < 1:
                 raise ValueError("hidden sequence must contain at least one layer size")
         else:
-            # integer hidden size + number of layers
             if layers < 2:
                 raise ValueError("layers must be >= 2 when `hidden` is an int")
-            # first hidden layer + (layers-2) intermediate hidden layers
             sizes = [int(hidden)] * (layers - 1)
 
-        # Assemble nn.Sequential: in_dim -> sizes[0] -> ... -> sizes[-1] -> out_dim
-        net: list[nn.Module] = []
-        # first layer
-        net.append(nn.Linear(in_dim, sizes[0]))
-        net.append(nn.Tanh())
-
-        # intermediate hidden layers
+        net: list[nn.Module] = [nn.Linear(in_dim, sizes[0]), nn.Tanh()]
         for prev, curr in zip(sizes[:-1], sizes[1:]):
             net.append(nn.Linear(prev, curr))
             net.append(nn.Tanh())
-
-        # final linear to output
         net.append(nn.Linear(sizes[-1], out_dim))
         self.net = nn.Sequential(*net)
 
@@ -73,25 +54,15 @@ class MLP(nn.Module):
                 nn.init.zeros_(m.bias)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass.
-
-        Inputs:
-        - `x`: tensor shaped (N, in_dim) containing concatenated spatial and temporal inputs.
-
-        Returns predicted scalar field (N, out_dim).
-        """
         return self.net(x)
 
 
-def _grad(outputs: torch.Tensor, inputs: torch.Tensor, create_graph: bool = True, retain_graph: bool = True) -> torch.Tensor:
-    """Compute gradient of `outputs` w.r.t. `inputs` using PyTorch autograd.
-
-    Returns tensor with same shape as `inputs` representing d(outputs)/d(inputs).
-
-    Args:
-        create_graph: whether to create the graph for higher-order derivatives.
-        retain_graph: whether to retain the graph for further operations.
-    """
+def _grad(
+    outputs: torch.Tensor,
+    inputs: torch.Tensor,
+    create_graph: bool = True,
+    retain_graph: bool = True,
+) -> torch.Tensor:
     return torch.autograd.grad(
         outputs=outputs,
         inputs=inputs,
@@ -100,6 +71,7 @@ def _grad(outputs: torch.Tensor, inputs: torch.Tensor, create_graph: bool = True
         retain_graph=retain_graph,
         only_inputs=True,
     )[0]
+
 
 @dataclass
 class LossWeights:
@@ -112,6 +84,7 @@ class LossWeights:
 @dataclass
 class FluxLearnedConfig:
     """Configuration for unknown nondimensional flux q_hat(tau)."""
+
     tau_knots: torch.Tensor
     q_ctrl: torch.nn.Parameter
     lambda_smooth: float = 0.0
@@ -122,20 +95,11 @@ def interp1d_linear(
     y_knots: torch.Tensor,
     x_query: torch.Tensor,
 ) -> torch.Tensor:
-    """Simple linear interpolation with clamped ends.
-
-    Inputs:
-    - x_knots: shape (M,) increasing
-    - y_knots: shape (M,) or (M,1)
-    - x_query: shape (N,1) or (N,)
-    Returns:
-    - y_query: shape (N,1)
-    """
+    """Simple linear interpolation with clamped ends."""
     xk = x_knots.reshape(-1)
     yk = y_knots.reshape(-1)
     xq = x_query.reshape(-1)
 
-    # bucketize -> indices in [0, M]
     idx = torch.bucketize(xq, xk)
     idx = idx.clamp(1, xk.numel() - 1)
 
@@ -156,36 +120,28 @@ def pde_residual_theta_tau_minus_theta_xi_xx(
     mu: Optional[torch.Tensor] = None,
     create_graph: bool = True,
 ) -> torch.Tensor:
-    """
-    Residual for nondimensional 1D heat equation:
-      theta_tau - theta_xi_xi = 0
-
-    Args:
-        create_graph: whether to build graph for higher-order derivatives.
-    """
-    # Ensure inputs require grad so derivatives can be computed
+    """Residual for the nondimensional 1D heat equation: theta_tau - theta_xi_xi = 0."""
     xi = xi.clone().detach().requires_grad_(True)
     tau = tau.clone().detach().requires_grad_(True)
 
-    # Concatenate spatial and temporal coordinates and evaluate network
-    X = _stack_input(xi, tau, mu)
-    theta = model(X)
-
-    # Compute derivatives using autograd helpers
+    theta = model(_stack_input(xi, tau, mu))
     theta_tau = _grad(theta, tau, create_graph=create_graph, retain_graph=True)
     theta_xi = _grad(theta, xi, create_graph=create_graph, retain_graph=True)
     theta_xixi = _grad(theta_xi, xi, create_graph=create_graph, retain_graph=create_graph)
 
-    # Residual R = theta_tau - theta_xi_xi
     r = theta_tau - theta_xixi
     if r.shape != xi.shape:
         raise AssertionError(f"PDE residual shape mismatch: {r.shape} vs xi {xi.shape}")
     return r
 
 
-def predict_theta(model: nn.Module, xi: torch.Tensor, tau: torch.Tensor, mu: Optional[torch.Tensor] = None) -> torch.Tensor:
-    X = _stack_input(xi, tau, mu)
-    return model(X)
+def predict_theta(
+    model: nn.Module,
+    xi: torch.Tensor,
+    tau: torch.Tensor,
+    mu: Optional[torch.Tensor] = None,
+) -> torch.Tensor:
+    return model(_stack_input(xi, tau, mu))
 
 
 def _stack_input(xi: torch.Tensor, tau: torch.Tensor, mu: Optional[torch.Tensor]) -> torch.Tensor:
@@ -202,13 +158,10 @@ def dtheta_dxi(
     mu: Optional[torch.Tensor] = None,
     create_graph: bool = True,
 ) -> torch.Tensor:
-    # Compute first derivative of theta with respect to xi
     xi = xi.clone().detach().requires_grad_(True)
     tau = tau.clone().detach().requires_grad_(True)
-    X = _stack_input(xi, tau, mu)
-    theta = model(X)
-    theta_xi = _grad(theta, xi, create_graph=create_graph, retain_graph=create_graph)
-    return theta_xi
+    theta = model(_stack_input(xi, tau, mu))
+    return _grad(theta, xi, create_graph=create_graph, retain_graph=create_graph)
 
 
 def compute_losses(
@@ -216,77 +169,80 @@ def compute_losses(
     batch,
     weights: LossWeights,
     flux_mode: str = "known",
-    flux_cfg: Optional[FluxLearnedConfig] = None,
+    flux_cfg: FluxLearnedConfig | None = None,
     create_graph: bool = True,
 ) -> Tuple[torch.Tensor, Dict[str, float]]:
-    """
-    batch is PINNBatch from src.data
+    """Compute PINN losses for parametric and legacy batch structures."""
 
-    Args:
-        create_graph: whether to create autograd graph (set False for validation).
-    """
-    # Validate flux API.
-    flux_mode = str(flux_mode).lower()
-    if flux_mode not in {"known", "unknown"}:
-        raise ValueError(f"Invalid flux_mode '{flux_mode}'. Expected 'known' or 'unknown'.")
+    device = getattr(batch, "xi_r", torch.tensor(0.0)).device
 
-    # Ensure we can create fallback tensors even if some inputs are empty.
-    device = getattr(batch, "xi_r", torch.tensor(0)).device
-
-    # Initial condition loss (theta predicted vs. given at tau=0)
     mu_ic = getattr(batch, "mu_ic", None)
     theta_ic_hat = predict_theta(model, batch.xi_ic, batch.tau_ic, mu_ic)
-    loss_ic = torch.mean((theta_ic_hat - batch.theta_ic) ** 2) if batch.xi_ic.numel() > 0 else torch.tensor(0.0, device=device)
+    loss_ic = (
+        torch.mean((theta_ic_hat - batch.theta_ic) ** 2)
+        if batch.xi_ic.numel() > 0
+        else torch.tensor(0.0, device=device)
+    )
 
-    # Optional interior data loss (if available)
     loss_data = torch.tensor(0.0, device=device)
     if batch.xi_data is not None and batch.tau_data is not None and batch.theta_data is not None:
         mu_data = getattr(batch, "mu_data", None)
         theta_data_hat = predict_theta(model, batch.xi_data, batch.tau_data, mu_data)
-        loss_data = torch.mean((theta_data_hat - batch.theta_data) ** 2) if batch.xi_data.numel() > 0 else torch.tensor(0.0, device=device)
+        loss_data = (
+            torch.mean((theta_data_hat - batch.theta_data) ** 2)
+            if batch.xi_data.numel() > 0
+            else torch.tensor(0.0, device=device)
+        )
 
-    # PDE residual loss (enforce PDE at collocation points)
     mu_r = getattr(batch, "mu_r", None)
     r = pde_residual_theta_tau_minus_theta_xi_xx(
-        model, batch.xi_r, batch.tau_r, mu_r, create_graph=create_graph
+        model,
+        batch.xi_r,
+        batch.tau_r,
+        mu_r,
+        create_graph=create_graph,
     )
     loss_pde = torch.mean(r**2) if batch.xi_r.numel() > 0 else torch.tensor(0.0, device=device)
 
-    # Boundary condition loss.
-    # For this 1D heat conduction scenario, the right boundary (xi=1) is typically a
-    # *flux* (Neumann) condition, while the left boundary (xi=0) is a fixed temperature
-    # (Dirichlet) condition. The dataset represents the known right‐boundary flux
-    # in `batch.flux_bc` (nondimensional theta_xi), so we enforce that when present.
+    # Default parametric path:
+    # - temperature targets in theta_bc enforce both left fixed Dirichlet and
+    #   right-boundary temperature consistency with masking via NaNs.
+    # Compatibility path:
+    # - explicit Neumann/flux targets are still supported for legacy workflows.
     loss_bc = torch.tensor(0.0, device=device)
     if weights.w_bc != 0.0 and batch.xi_bc.numel() > 0:
         mu_bc = getattr(batch, "mu_bc", None)
 
-        loss_dirichlet = torch.tensor(0.0, device=device)
+        loss_temp_bc = torch.tensor(0.0, device=device)
         theta_bc_target = getattr(batch, "theta_bc", None)
         if theta_bc_target is not None and theta_bc_target.numel() > 0:
             theta_bc_hat = predict_theta(model, batch.xi_bc, batch.tau_bc, mu_bc)
-            # Allow masking of Dirichlet points via NaNs in theta_bc_target
             mask = ~torch.isnan(theta_bc_target)
             if mask.any():
                 diff = theta_bc_hat[mask] - theta_bc_target[mask]
-                loss_dirichlet = torch.mean(diff**2)
+                loss_temp_bc = torch.mean(diff**2)
 
-        loss_neumann = torch.tensor(0.0, device=device)
+        loss_flux_bc = torch.tensor(0.0, device=device)
         flux_bc_target = getattr(batch, "flux_bc", None)
+        if str(flux_mode).lower() == "unknown":
+            if flux_cfg is None:
+                raise ValueError("flux_mode='unknown' requires flux_cfg.")
+            flux_bc_target = interp1d_linear(flux_cfg.tau_knots, flux_cfg.q_ctrl, batch.tau_bc)
         if flux_bc_target is not None and flux_bc_target.numel() > 0:
-            theta_xi_bc = dtheta_dxi(model, batch.xi_bc, batch.tau_bc, mu_bc, create_graph=create_graph)
-            # Allow masking of Neumann points via NaNs in flux_bc_target
+            theta_xi_bc = dtheta_dxi(
+                model,
+                batch.xi_bc,
+                batch.tau_bc,
+                mu_bc,
+                create_graph=create_graph,
+            )
             mask = ~torch.isnan(flux_bc_target)
             if mask.any():
                 diff = theta_xi_bc[mask] - flux_bc_target[mask]
-                loss_neumann = torch.mean(diff**2)
+                loss_flux_bc = torch.mean(diff**2)
 
-        # Combine Dirichlet and Neumann contributions if both are present.
-        loss_bc = loss_dirichlet + loss_neumann
-    else:
-        loss_bc = torch.tensor(0.0, device=device)
+        loss_bc = loss_temp_bc + loss_flux_bc
 
-    # Weighted total loss used for training
     total = (
         weights.w_pde * loss_pde
         + weights.w_ic * loss_ic
@@ -305,8 +261,8 @@ def compute_losses(
         "total": float(total.detach().cpu().item()),
         "pde": float(loss_pde.detach().cpu().item()),
         "ic": float(loss_ic.detach().cpu().item()),
-        "bc": float(loss_bc.detach().cpu().item()),  # BC loss (not optimized when w_bc=0)
-        "bc_monitor": 0.0,  # Disabled during training to avoid graph conflicts
+        "bc": float(loss_bc.detach().cpu().item()),
+        "bc_monitor": 0.0,
         "data": float(loss_data.detach().cpu().item()),
         "smooth": 0.0,
     }
