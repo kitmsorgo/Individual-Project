@@ -1,0 +1,21 @@
+Validation Metrics
+==================
+total: 3.760502e-02
+pde: 3.746295e-02
+ic: 8.262051e-06
+bc: 4.885283e-05
+bc_left: 0.000000e+00
+bc_right: 4.885283e-05
+bc_left_raw: 0.000000e+00
+bc_right_raw: 4.885283e-04
+bc_flux_legacy: 0.000000e+00
+bc_left_rmse: 0.000000e+00
+bc_right_rmse: 2.210268e-02
+bc_monitor: 0.000000e+00
+data: 2.805010e-05
+flux: 9.726485e-04
+smooth: 0.000000e+00
+rmse_data: 5.296234e-03
+flux_rmse_mean: 7.876891e+02
+flux_amp_error_mean: 2.745709e+02
+phase_lag_tau_mean: 3.618450e-03
