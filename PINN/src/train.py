@@ -35,6 +35,7 @@ CSV_COLUMNS = [
     "bc_right_rmse",
     "bc_monitor",
     "data",
+    "grad_loss",
     "rmse_data",
     "grad_norm",
     "elapsed_s",
@@ -47,6 +48,7 @@ CSV_COLUMNS = [
     "val_bc_left_rmse",
     "val_bc_right_rmse",
     "val_data",
+    "val_grad_loss",
     "val_rmse_data",
     "gen_gap_rmse_data",
 ]
@@ -292,6 +294,7 @@ def train_adam(
             "bc_right_rmse": train_logs.get("bc_right_rmse", math.nan),
             "bc_monitor": train_logs.get("bc_monitor", math.nan),
             "data": train_logs.get("data", math.nan),
+            "grad_loss": train_logs.get("grad_loss", math.nan),
             "rmse_data": train_data_rmse,
             "grad_norm": float(grad_norm),
             "elapsed_s": elapsed_s,
@@ -319,6 +322,7 @@ def train_adam(
                     "val_bc_left_rmse": val_logs.get("bc_left_rmse", math.nan),
                     "val_bc_right_rmse": val_logs.get("bc_right_rmse", math.nan),
                     "val_data": val_data_mse,
+                    "val_grad_loss": val_logs.get("grad_loss", math.nan),
                     "val_rmse_data": val_rmse_data,
                     "gen_gap_rmse_data": gen_gap,
                 }
@@ -335,6 +339,7 @@ def train_adam(
                     "val_bc_left_rmse": math.nan,
                     "val_bc_right_rmse": math.nan,
                     "val_data": math.nan,
+                    "val_grad_loss": math.nan,
                     "val_rmse_data": math.nan,
                     "gen_gap_rmse_data": math.nan,
                 }
@@ -410,6 +415,7 @@ def train_adam(
                         "bc_right_rmse": float(row.get("bc_right_rmse", math.nan)),
                         "ic_loss": float(row.get("ic", math.nan)),
                         "data_loss": float(row.get("data", math.nan)),
+                        "grad_loss": float(row.get("grad_loss", math.nan)),
                         "grad_norm": float(row.get("grad_norm", math.nan)),
                         "learning_rate": float(lr),
                         "time_elapsed_s": float(elapsed_s),
@@ -425,10 +431,11 @@ def train_adam(
             print(
                 f"[Adam] step {step}/{max_steps} | total={row['total']:.4e} "
                 f"(pde={row['pde']:.2e}, ic={row['ic']:.2e}, bcL={row['bc_left']:.2e}, "
-                f"bcR={row['bc_right']:.2e}, data={row['data']:.2e}) "
+                f"bcR={row['bc_right']:.2e}, data={row['data']:.2e}, grad={row['grad_loss']:.2e}) "
                 f"| bc_rmse(L={row['bc_left_rmse']:.2e}, R={row['bc_right_rmse']:.2e}) "
                 f"| val_rmse={row['val_rmse_data']:.2e} | val_bc_rmse(L={row['val_bc_left_rmse']:.2e}, "
                 f"R={row['val_bc_right_rmse']:.2e}) | val_pde={row['val_pde']:.2e} "
+                f"| val_grad={row['val_grad_loss']:.2e} "
                 f"| grad={row['grad_norm']:.2e} | {elapsed_s:.1f}s"
             )
 
@@ -547,6 +554,7 @@ def train_lbfgs(
         "bc_left_rmse": train_logs.get("bc_left_rmse", math.nan),
         "bc_right_rmse": train_logs.get("bc_right_rmse", math.nan),
         "data": train_logs.get("data", math.nan),
+        "grad_loss": train_logs.get("grad_loss", math.nan),
         "grad_norm": float(grad_norm),
         "elapsed_s": elapsed_s,
     }
@@ -566,6 +574,7 @@ def train_lbfgs(
                 "val_bc_left_rmse": val_logs.get("bc_left_rmse", math.nan),
                 "val_bc_right_rmse": val_logs.get("bc_right_rmse", math.nan),
                 "val_data": val_logs.get("data", math.nan),
+                "val_grad_loss": val_logs.get("grad_loss", math.nan),
             }
         )
 
@@ -576,7 +585,7 @@ def train_lbfgs(
     print(
         f"[LBFGS] done | total={row['total']:.4e} "
         f"(pde={row['pde']:.2e}, ic={row['ic']:.2e}, bcL={row['bc_left']:.2e}, "
-        f"bcR={row['bc_right']:.2e}, data={row['data']:.2e}) "
+        f"bcR={row['bc_right']:.2e}, data={row['data']:.2e}, grad={row['grad_loss']:.2e}) "
         f"| bc_rmse(L={row['bc_left_rmse']:.2e}, R={row['bc_right_rmse']:.2e}) "
         f"| grad={row['grad_norm']:.2e}"
     )

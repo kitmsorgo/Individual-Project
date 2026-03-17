@@ -82,6 +82,7 @@ class LossWeights:
     w_bc_right: float = 1.0
     w_data: float = 1.0
     w_flux: float = 1.0
+    w_grad: float = 0.0
 
 
 @dataclass
@@ -277,9 +278,23 @@ def compute_losses(
     loss_bc_right = torch.tensor(0.0, device=device)
     loss_bc_flux_legacy = torch.tensor(0.0, device=device)
     loss_flux = torch.tensor(0.0, device=device)
+    loss_grad = torch.tensor(0.0, device=device)
     if weights.w_bc != 0.0 and batch.xi_bc.numel() > 0:
         mu_bc = getattr(batch, "mu_bc", None)
         xi_bc = batch.xi_bc
+        theta_xi_bc = None
+
+        def _theta_xi_bc() -> torch.Tensor:
+            nonlocal theta_xi_bc
+            if theta_xi_bc is None:
+                theta_xi_bc = dtheta_dxi(
+                    model,
+                    batch.xi_bc,
+                    batch.tau_bc,
+                    mu_bc,
+                    create_graph=create_graph,
+                )
+            return theta_xi_bc
 
         theta_bc_target = getattr(batch, "theta_bc", None)
         if theta_bc_target is not None and theta_bc_target.numel() > 0:
@@ -301,18 +316,21 @@ def compute_losses(
                 raise ValueError("flux_mode='unknown' requires flux_cfg.")
             flux_bc_target = interp1d_linear(flux_cfg.tau_knots, flux_cfg.q_ctrl, batch.tau_bc)
         if flux_bc_target is not None and flux_bc_target.numel() > 0:
-            theta_xi_bc = dtheta_dxi(
-                model,
-                batch.xi_bc,
-                batch.tau_bc,
-                mu_bc,
-                create_graph=create_graph,
-            )
+            theta_xi_bc = _theta_xi_bc()
             mask_flux = ~torch.isnan(flux_bc_target)
             mask_flux_right = mask_flux & torch.isclose(xi_bc, torch.ones_like(xi_bc))
             if mask_flux_right.any():
                 diff_flux = theta_xi_bc[mask_flux_right] - flux_bc_target[mask_flux_right]
                 loss_bc_flux_legacy = torch.mean(diff_flux**2)
+
+        grad_bc_target = getattr(batch, "grad_bc", None)
+        if grad_bc_target is not None and grad_bc_target.numel() > 0:
+            theta_xi_bc = _theta_xi_bc()
+            mask_grad = ~torch.isnan(grad_bc_target)
+            mask_grad_right = mask_grad & torch.isclose(xi_bc, torch.ones_like(xi_bc))
+            if mask_grad_right.any():
+                diff_grad = theta_xi_bc[mask_grad_right] - grad_bc_target[mask_grad_right]
+                loss_grad = torch.mean(diff_grad**2)
 
         aux_flux_hat = predict_flux(model, batch.tau_bc, mu_bc)
         if aux_flux_hat is not None:
@@ -340,6 +358,7 @@ def compute_losses(
         + loss_bc
         + weights.w_data * loss_data
         + weights.w_flux * loss_flux
+        + weights.w_grad * loss_grad
     )
     if not torch.isfinite(total):
         print(f"Total loss not finite: {total.item()}")
@@ -347,6 +366,7 @@ def compute_losses(
         print(f"loss_ic: {loss_ic.item()}")
         print(f"loss_bc: {loss_bc.item()}")
         print(f"loss_data: {loss_data.item()}")
+        print(f"loss_grad: {loss_grad.item()}")
         raise AssertionError("Total loss is not finite.")
 
     logs = {
@@ -364,6 +384,7 @@ def compute_losses(
         "bc_monitor": 0.0,
         "data": float(loss_data.detach().cpu().item()),
         "flux": float(loss_flux.detach().cpu().item()),
+        "grad_loss": float(loss_grad.detach().cpu().item()),
         "smooth": 0.0,
     }
     return total, logs

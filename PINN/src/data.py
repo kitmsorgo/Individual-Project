@@ -26,6 +26,7 @@ class PINNBatch:
     xi_bc: torch.Tensor
     tau_bc: torch.Tensor
     flux_bc: Optional[torch.Tensor] = None  # nondimensional flux (known mode only)
+    grad_bc: Optional[torch.Tensor] = None  # true nondimensional theta_xi at xi=1 (optional)
 
     # Optional interior data points
     xi_data: Optional[torch.Tensor] = None
@@ -51,6 +52,7 @@ class ParamPINNBatch:
     tau_bc: torch.Tensor
     mu_bc: torch.Tensor
     flux_bc: Optional[torch.Tensor] = None
+    grad_bc: Optional[torch.Tensor] = None
     theta_bc: Optional[torch.Tensor] = None
 
     # Optional interior data points
@@ -88,6 +90,7 @@ def load_npz_dataset(npz_path: str | Path, device: torch.device) -> PINNBatch:
         xi_bc=_to_tensor(data["xi_bc"], device),
         tau_bc=_to_tensor(data["tau_bc"], device),
         flux_bc=_to_tensor(data["flux_bc"], device) if "flux_bc" in data else None,
+        grad_bc=_to_tensor(data["grad_bc"], device) if "grad_bc" in data else None,
     )
 
     if "xi_data" in data and "tau_data" in data and "theta_data" in data:
@@ -285,10 +288,14 @@ def build_train_val_batches_from_case(
 
     flux_train: Optional[torch.Tensor] = None
     flux_val: Optional[torch.Tensor] = None
+    grad_train: Optional[torch.Tensor] = None
+    grad_val: Optional[torch.Tensor] = None
     if flux_mode == "known":
         known_flux_tensor = torch.tensor(flux_bc_known, dtype=torch.float32, device=device)
         flux_train = known_flux_tensor
         flux_val = known_flux_tensor
+        grad_train = known_flux_tensor
+        grad_val = known_flux_tensor
 
     train_batch = PINNBatch(
         xi_r=torch.tensor(xi_r, dtype=torch.float32, device=device),
@@ -299,6 +306,7 @@ def build_train_val_batches_from_case(
         xi_bc=torch.tensor(xi_bc, dtype=torch.float32, device=device),
         tau_bc=torch.tensor(tau_bc, dtype=torch.float32, device=device),
         flux_bc=flux_train,
+        grad_bc=grad_train,
         xi_data=torch.tensor(xi_data_all[train_idx], dtype=torch.float32, device=device),
         tau_data=torch.tensor(tau_data_all[train_idx], dtype=torch.float32, device=device),
         theta_data=torch.tensor(theta_data_all[train_idx], dtype=torch.float32, device=device),
@@ -312,6 +320,7 @@ def build_train_val_batches_from_case(
         xi_bc=torch.tensor(xi_bc, dtype=torch.float32, device=device),
         tau_bc=torch.tensor(tau_bc, dtype=torch.float32, device=device),
         flux_bc=flux_val,
+        grad_bc=grad_val,
         xi_data=torch.tensor(xi_data_all[val_idx], dtype=torch.float32, device=device),
         tau_data=torch.tensor(tau_data_all[val_idx], dtype=torch.float32, device=device),
         theta_data=torch.tensor(theta_data_all[val_idx], dtype=torch.float32, device=device),
@@ -369,6 +378,7 @@ def build_synthetic_batch(
         xi_bc=torch.tensor(xi_bc, dtype=torch.float32, device=device),
         tau_bc=torch.tensor(tau_bc, dtype=torch.float32, device=device),
         flux_bc=torch.tensor(flux_bc, dtype=torch.float32, device=device),
+        grad_bc=torch.tensor(flux_bc, dtype=torch.float32, device=device),
     )
 
     if n_data > 0:
