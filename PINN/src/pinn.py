@@ -316,7 +316,7 @@ def compute_losses(
 
         aux_flux_hat = predict_flux(model, batch.tau_bc, mu_bc)
         if aux_flux_hat is not None:
-            mask_aux_right = torch.isclose(xi_bc, torch.ones_like(xi_bc))
+            mask_aux_right = torch.isclose(xi_bc, torch.ones_like(xi_bc)).reshape(-1)
             if mask_aux_right.any():
                 theta_xi_bc = dtheta_dxi(
                     model,

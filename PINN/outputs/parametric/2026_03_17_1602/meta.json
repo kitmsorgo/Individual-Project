@@ -1,0 +1,25 @@
+{
+  "optimizer": "adam",
+  "lr": 0.001,
+  "steps": null,
+  "eval_every": 800,
+  "max_steps": 20000,
+  "min_steps": 200,
+  "patience_evals": 10,
+  "plateau_window": 10,
+  "plateau_rel_tol": 0.005,
+  "pde_guardrail_rel": 0.05,
+  "data_batch_size": 5000,
+  "weights": {
+    "w_pde": 1.0,
+    "w_ic": 2.0,
+    "w_bc": null,
+    "w_bc_left": 0.0,
+    "w_bc_right": 0.1,
+    "w_data": 1.0,
+    "w_flux": 0.05
+  },
+  "timestamp": "2026-03-17 16:02:10",
+  "keep_best_k": 0,
+  "has_val_batch": true
+}

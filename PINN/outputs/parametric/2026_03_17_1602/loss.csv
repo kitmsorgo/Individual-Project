@@ -1,0 +1,1 @@
+step,total,pde,ic,bc,bc_left,bc_right,bc_left_rmse,bc_right_rmse,bc_monitor,data,rmse_data,grad_norm,elapsed_s,val_total,val_pde,val_ic,val_bc,val_bc_left,val_bc_right,val_bc_left_rmse,val_bc_right_rmse,val_data,val_rmse_data,gen_gap_rmse_data
