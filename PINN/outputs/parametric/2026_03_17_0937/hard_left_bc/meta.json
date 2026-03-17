@@ -1,0 +1,16 @@
+{
+  "optimizer": "lbfgs",
+  "lr": 1.0,
+  "max_iter": 500,
+  "history_size": 50,
+  "weights": {
+    "w_pde": 1.0,
+    "w_ic": 1.0,
+    "w_bc": null,
+    "w_bc_left": 5.0,
+    "w_bc_right": 1.0,
+    "w_data": 1.0
+  },
+  "timestamp": "2026-03-17 09:51:28",
+  "has_val_batch": true
+}

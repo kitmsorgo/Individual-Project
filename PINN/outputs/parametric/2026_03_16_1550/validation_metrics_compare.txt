@@ -1,0 +1,39 @@
+Validation Metrics Comparison
+=============================
+[soft_bc]
+total: 1.510911e-04
+pde: 8.054634e-05
+ic: 1.051878e-05
+bc: 5.485288e-05
+bc_left: 2.102783e-05
+bc_right: 3.382505e-05
+bc_left_raw: 4.205566e-06
+bc_right_raw: 3.382505e-05
+bc_flux_legacy: 0.000000e+00
+bc_left_rmse: 2.050748e-03
+bc_right_rmse: 5.815930e-03
+bc_monitor: 0.000000e+00
+data: 5.173154e-06
+smooth: 0.000000e+00
+
+[hard_left_bc]
+total: 7.632527e-05
+pde: 4.880432e-05
+ic: 1.636032e-05
+bc: 9.334990e-06
+bc_left: 0.000000e+00
+bc_right: 9.334990e-06
+bc_left_raw: 0.000000e+00
+bc_right_raw: 9.334990e-06
+bc_flux_legacy: 0.000000e+00
+bc_left_rmse: 0.000000e+00
+bc_right_rmse: 3.055322e-03
+bc_monitor: 0.000000e+00
+data: 1.825639e-06
+smooth: 0.000000e+00
+
+Case-level comparison
+---------------------
+     variant  left_rmse  left_max_abs  right_rmse  interior_rmse  full_rmse
+     soft_bc   0.000899      0.001784    0.003950       0.001638   0.001702
+hard_left_bc   0.000000      0.000000    0.002016       0.000859   0.000888

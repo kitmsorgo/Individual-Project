@@ -77,7 +77,9 @@ def _grad(
 class LossWeights:
     w_pde: float = 1.0
     w_ic: float = 1.0
-    w_bc: float = 1.0
+    w_bc: float | None = None
+    w_bc_left: float = 1.0
+    w_bc_right: float = 1.0
     w_data: float = 1.0
 
 
@@ -88,6 +90,24 @@ class FluxLearnedConfig:
     tau_knots: torch.Tensor
     q_ctrl: torch.nn.Parameter
     lambda_smooth: float = 0.0
+
+
+class LeftBoundaryAnsatzMLP(nn.Module):
+    """Wrap an MLP with theta(xi, tau, mu) = xi * N(xi, tau, mu)."""
+
+    def __init__(
+        self,
+        in_dim: int = 2,
+        hidden: Sequence[int] | int = 30,
+        layers: int = 2,
+        out_dim: int = 1,
+    ):
+        super().__init__()
+        self.base = MLP(in_dim=in_dim, hidden=hidden, layers=layers, out_dim=out_dim)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        xi = x[:, :1]
+        return xi * self.base(x)
 
 
 def interp1d_linear(
@@ -204,25 +224,28 @@ def compute_losses(
     )
     loss_pde = torch.mean(r**2) if batch.xi_r.numel() > 0 else torch.tensor(0.0, device=device)
 
-    # Default parametric path:
-    # - temperature targets in theta_bc enforce both left fixed Dirichlet and
-    #   right-boundary temperature consistency with masking via NaNs.
-    # Compatibility path:
-    # - explicit Neumann/flux targets are still supported for legacy workflows.
-    loss_bc = torch.tensor(0.0, device=device)
+    bc_scale = 1.0 if weights.w_bc is None else float(weights.w_bc)
+    loss_bc_left = torch.tensor(0.0, device=device)
+    loss_bc_right = torch.tensor(0.0, device=device)
+    loss_bc_flux_legacy = torch.tensor(0.0, device=device)
     if weights.w_bc != 0.0 and batch.xi_bc.numel() > 0:
         mu_bc = getattr(batch, "mu_bc", None)
+        xi_bc = batch.xi_bc
 
-        loss_temp_bc = torch.tensor(0.0, device=device)
         theta_bc_target = getattr(batch, "theta_bc", None)
         if theta_bc_target is not None and theta_bc_target.numel() > 0:
             theta_bc_hat = predict_theta(model, batch.xi_bc, batch.tau_bc, mu_bc)
-            mask = ~torch.isnan(theta_bc_target)
-            if mask.any():
-                diff = theta_bc_hat[mask] - theta_bc_target[mask]
-                loss_temp_bc = torch.mean(diff**2)
+            mask_temp = ~torch.isnan(theta_bc_target)
+            mask_left = mask_temp & torch.isclose(xi_bc, torch.zeros_like(xi_bc))
+            mask_right = mask_temp & torch.isclose(xi_bc, torch.ones_like(xi_bc))
 
-        loss_flux_bc = torch.tensor(0.0, device=device)
+            if mask_left.any():
+                diff_left = theta_bc_hat[mask_left] - theta_bc_target[mask_left]
+                loss_bc_left = torch.mean(diff_left**2)
+            if mask_right.any():
+                diff_right = theta_bc_hat[mask_right] - theta_bc_target[mask_right]
+                loss_bc_right = torch.mean(diff_right**2)
+
         flux_bc_target = getattr(batch, "flux_bc", None)
         if str(flux_mode).lower() == "unknown":
             if flux_cfg is None:
@@ -236,17 +259,22 @@ def compute_losses(
                 mu_bc,
                 create_graph=create_graph,
             )
-            mask = ~torch.isnan(flux_bc_target)
-            if mask.any():
-                diff = theta_xi_bc[mask] - flux_bc_target[mask]
-                loss_flux_bc = torch.mean(diff**2)
+            mask_flux = ~torch.isnan(flux_bc_target)
+            mask_flux_right = mask_flux & torch.isclose(xi_bc, torch.ones_like(xi_bc))
+            if mask_flux_right.any():
+                diff_flux = theta_xi_bc[mask_flux_right] - flux_bc_target[mask_flux_right]
+                loss_bc_flux_legacy = torch.mean(diff_flux**2)
 
-        loss_bc = loss_temp_bc + loss_flux_bc
+    loss_bc_right_total = loss_bc_right + loss_bc_flux_legacy
+    loss_bc = bc_scale * (
+        weights.w_bc_left * loss_bc_left
+        + weights.w_bc_right * loss_bc_right_total
+    )
 
     total = (
         weights.w_pde * loss_pde
         + weights.w_ic * loss_ic
-        + weights.w_bc * loss_bc
+        + loss_bc
         + weights.w_data * loss_data
     )
     if not torch.isfinite(total):
@@ -262,6 +290,13 @@ def compute_losses(
         "pde": float(loss_pde.detach().cpu().item()),
         "ic": float(loss_ic.detach().cpu().item()),
         "bc": float(loss_bc.detach().cpu().item()),
+        "bc_left": float((bc_scale * weights.w_bc_left * loss_bc_left).detach().cpu().item()),
+        "bc_right": float((bc_scale * weights.w_bc_right * loss_bc_right_total).detach().cpu().item()),
+        "bc_left_raw": float(loss_bc_left.detach().cpu().item()),
+        "bc_right_raw": float(loss_bc_right.detach().cpu().item()),
+        "bc_flux_legacy": float(loss_bc_flux_legacy.detach().cpu().item()),
+        "bc_left_rmse": float(torch.sqrt(torch.clamp(loss_bc_left.detach(), min=0.0)).cpu().item()),
+        "bc_right_rmse": float(torch.sqrt(torch.clamp(loss_bc_right.detach(), min=0.0)).cpu().item()),
         "bc_monitor": 0.0,
         "data": float(loss_data.detach().cpu().item()),
         "smooth": 0.0,

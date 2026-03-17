@@ -29,6 +29,10 @@ CSV_COLUMNS = [
     "pde",
     "ic",
     "bc",
+    "bc_left",
+    "bc_right",
+    "bc_left_rmse",
+    "bc_right_rmse",
     "bc_monitor",
     "data",
     "rmse_data",
@@ -38,6 +42,10 @@ CSV_COLUMNS = [
     "val_pde",
     "val_ic",
     "val_bc",
+    "val_bc_left",
+    "val_bc_right",
+    "val_bc_left_rmse",
+    "val_bc_right_rmse",
     "val_data",
     "val_rmse_data",
     "gen_gap_rmse_data",
@@ -104,9 +112,7 @@ def _is_meaningful_rmse_improvement(current_rmse: float, best_rmse: float) -> tu
 def compute_losses_eval(
     model: nn.Module,
     batch: Any,
-    weights: LossWeights,
-    flux_mode: str = "known",
-    flux_cfg: FluxLearnedConfig | None = None,
+    weights: LossWeights, 
     create_graph: bool = True,
 ) -> Tuple[torch.Tensor, Dict[str, float]]:
     """Evaluate losses while keeping autograd enabled.
@@ -121,9 +127,7 @@ def compute_losses_eval(
     loss, logs = compute_losses(
         model,
         batch,
-        weights,
-        flux_mode=flux_mode,
-        flux_cfg=flux_cfg,
+        weights, 
         create_graph=create_graph,
     )
     out_logs = {k: float(v) for k, v in logs.items()}
@@ -131,15 +135,10 @@ def compute_losses_eval(
 
 def _collect_trainable_params(
     model: nn.Module,
-    flux_mode: str,
-    flux_cfg: FluxLearnedConfig | None,
     extra_params: list[nn.Parameter] | None,
 ) -> list[nn.Parameter]:
     params = list(model.parameters())
-    if str(flux_mode).lower() == "unknown":
-        if flux_cfg is None:
-            raise ValueError("flux_mode='unknown' requires flux_cfg.")
-        params.append(flux_cfg.q_ctrl)
+
     if extra_params:
         params.extend(list(extra_params))
 
@@ -158,9 +157,7 @@ def _collect_trainable_params(
 def train_adam(
     model: nn.Module,
     batch: Any,
-    weights: LossWeights,
-    flux_mode: str = "known",
-    flux_cfg: FluxLearnedConfig | None = None,
+    weights: LossWeights, 
     extra_params: list[nn.Parameter] | None = None,
     log_callback: Callable[[Dict[str, float | int | str | None]], None] | None = None,
     log_every: int = 1,
@@ -180,7 +177,7 @@ def train_adam(
     pde_guardrail_rel: float = 0.10,
     data_batch_size: int | None = None,
 ) -> Path:
-    """Train `model` with Adam using validation-based convergence control.
+    """Train `model` with Adam using validation-RMSE-based convergence control.
 
     Key steps per iteration:
     - zero gradients
@@ -189,6 +186,10 @@ def train_adam(
     - compute gradient norm for logging
     - optimizer step
     - periodic validation checkpoints, convergence checks, and CSV logging
+
+    Checkpoint selection and early stopping are driven by validation RMSE.
+    Validation PDE is still logged for monitoring, but it does not block a
+    checkpoint that improves RMSE.
 
     Why this controller avoids fixed step counts:
     - A fixed step count such as 1000 is arbitrary and may underfit or overfit.
@@ -226,7 +227,7 @@ def train_adam(
     )
 
     _init_loss_csv(loss_csv)
-    params = _collect_trainable_params(model, flux_mode, flux_cfg, extra_params)
+    params = _collect_trainable_params(model, extra_params)
     opt = torch.optim.Adam(params, lr=lr)
 
     # Backward compatibility: if `steps` is passed, treat it as max_steps.
@@ -239,7 +240,6 @@ def train_adam(
     best = float("inf")
     best_snapshots: list[Path] = []
     best_val_rmse = float("inf")
-    best_val_pde = float("inf")
     no_improve_evals = 0
     rmse_eval_history: list[float] = []
     stop_reason = "reached_max_steps"
@@ -270,9 +270,7 @@ def train_adam(
         loss, train_logs = compute_losses_eval(
             model,
             batch_for_loss,
-            weights,
-            flux_mode=flux_mode,
-            flux_cfg=flux_cfg,
+            weights, 
             create_graph=True,
         )
         loss.backward()
@@ -288,6 +286,10 @@ def train_adam(
             "pde": train_logs.get("pde", math.nan),
             "ic": train_logs.get("ic", math.nan),
             "bc": train_logs.get("bc", math.nan),
+            "bc_left": train_logs.get("bc_left", math.nan),
+            "bc_right": train_logs.get("bc_right", math.nan),
+            "bc_left_rmse": train_logs.get("bc_left_rmse", math.nan),
+            "bc_right_rmse": train_logs.get("bc_right_rmse", math.nan),
             "bc_monitor": train_logs.get("bc_monitor", math.nan),
             "data": train_logs.get("data", math.nan),
             "rmse_data": train_data_rmse,
@@ -300,9 +302,7 @@ def train_adam(
             _, val_logs = compute_losses_eval(
                 model,
                 val_batch,
-                weights,
-                flux_mode=flux_mode,
-                flux_cfg=flux_cfg,
+                weights, 
                 create_graph=False,
             )
             val_data_mse = float(val_logs.get("data", math.nan))
@@ -314,6 +314,10 @@ def train_adam(
                     "val_pde": val_logs.get("pde", math.nan),
                     "val_ic": val_logs.get("ic", math.nan),
                     "val_bc": val_logs.get("bc", math.nan),
+                    "val_bc_left": val_logs.get("bc_left", math.nan),
+                    "val_bc_right": val_logs.get("bc_right", math.nan),
+                    "val_bc_left_rmse": val_logs.get("bc_left_rmse", math.nan),
+                    "val_bc_right_rmse": val_logs.get("bc_right_rmse", math.nan),
                     "val_data": val_data_mse,
                     "val_rmse_data": val_rmse_data,
                     "gen_gap_rmse_data": gen_gap,
@@ -326,6 +330,10 @@ def train_adam(
                     "val_pde": math.nan,
                     "val_ic": math.nan,
                     "val_bc": math.nan,
+                    "val_bc_left": math.nan,
+                    "val_bc_right": math.nan,
+                    "val_bc_left_rmse": math.nan,
+                    "val_bc_right_rmse": math.nan,
                     "val_data": math.nan,
                     "val_rmse_data": math.nan,
                     "gen_gap_rmse_data": math.nan,
@@ -349,25 +357,20 @@ def train_adam(
 
         if eval_now:
             current_rmse = float(row.get("val_rmse_data", math.nan))
-            current_val_pde = float(row.get("val_pde", math.nan))
             rmse_eval_history.append(current_rmse)
-
+            
             is_improvement = False
             if math.isfinite(current_rmse):
                 if not math.isfinite(best_val_rmse):
                     is_improvement = True
+                    
                 else:
                     rmse_ok, _ = _is_meaningful_rmse_improvement(current_rmse, best_val_rmse)
-                    pde_guard_ok = True
-                    if math.isfinite(best_val_pde) and math.isfinite(current_val_pde):
-                        pde_guard_ok = current_val_pde <= best_val_pde * (1.0 + pde_guardrail_rel)
-                    elif math.isfinite(best_val_pde) and not math.isfinite(current_val_pde):
-                        pde_guard_ok = False
-                    is_improvement = rmse_ok and pde_guard_ok
+                    is_improvement = rmse_ok
 
             if is_improvement:
+                print(f"There has been an improvement in validation RMSE data. {best_val_rmse} -> {current_rmse}")
                 best_val_rmse = current_rmse
-                best_val_pde = current_val_pde
                 no_improve_evals = 0
                 _save_checkpoint(best_path, model)
             else:
@@ -400,6 +403,10 @@ def train_adam(
                         "total_loss": float(row.get("total", math.nan)),
                         "pde_loss": float(row.get("pde", math.nan)),
                         "bc_loss": float(row.get("bc", math.nan)),
+                        "bc_left_loss": float(row.get("bc_left", math.nan)),
+                        "bc_right_loss": float(row.get("bc_right", math.nan)),
+                        "bc_left_rmse": float(row.get("bc_left_rmse", math.nan)),
+                        "bc_right_rmse": float(row.get("bc_right_rmse", math.nan)),
                         "ic_loss": float(row.get("ic", math.nan)),
                         "data_loss": float(row.get("data", math.nan)),
                         "grad_norm": float(row.get("grad_norm", math.nan)),
@@ -416,8 +423,11 @@ def train_adam(
         if step % print_every == 0 or step == 1:
             print(
                 f"[Adam] step {step}/{max_steps} | total={row['total']:.4e} "
-                f"(pde={row['pde']:.2e}, ic={row['ic']:.2e}, bc={row['bc']:.2e}, data={row['data']:.2e}) "
-                f"| val_rmse={row['val_rmse_data']:.2e} | val_pde={row['val_pde']:.2e} "
+                f"(pde={row['pde']:.2e}, ic={row['ic']:.2e}, bcL={row['bc_left']:.2e}, "
+                f"bcR={row['bc_right']:.2e}, data={row['data']:.2e}) "
+                f"| bc_rmse(L={row['bc_left_rmse']:.2e}, R={row['bc_right_rmse']:.2e}) "
+                f"| val_rmse={row['val_rmse_data']:.2e} | val_bc_rmse(L={row['val_bc_left_rmse']:.2e}, "
+                f"R={row['val_bc_right_rmse']:.2e}) | val_pde={row['val_pde']:.2e} "
                 f"| grad={row['grad_norm']:.2e} | {elapsed_s:.1f}s"
             )
 
@@ -428,9 +438,7 @@ def train_adam(
 def train_lbfgs(
     model: nn.Module,
     batch: Any,
-    weights: LossWeights,
-    flux_mode: str = "known",
-    flux_cfg: FluxLearnedConfig | None = None,
+    weights: LossWeights, 
     extra_params: list[nn.Parameter] | None = None,
     log_callback: Callable[[Dict[str, float | int | str | None]], None] | None = None,
     log_every: int = 1,
@@ -466,7 +474,7 @@ def train_lbfgs(
     )
 
     _init_loss_csv(loss_csv)
-    params = _collect_trainable_params(model, flux_mode, flux_cfg, extra_params)
+    params = _collect_trainable_params(model,  extra_params)
     opt = torch.optim.LBFGS(
         params,
         lr=lr,
@@ -480,7 +488,7 @@ def train_lbfgs(
     def closure() -> torch.Tensor:
         nonlocal closure_calls
         opt.zero_grad(set_to_none=True)
-        loss, _ = compute_losses(model, batch, weights, flux_mode=flux_mode, flux_cfg=flux_cfg)
+        loss, _ = compute_losses(model, batch, weights )
         loss.backward()
         closure_calls += 1
         if log_callback is not None and (closure_calls % max(1, int(log_every)) == 0):
@@ -512,7 +520,7 @@ def train_lbfgs(
     # Evaluate final loss and gradient norm for logging
     model.zero_grad(set_to_none=True)
     total, train_logs = compute_losses_eval(
-        model, batch, weights, flux_mode=flux_mode, flux_cfg=flux_cfg
+        model, batch, weights 
     )
     total.backward()
     grad_norm = _grad_norm(model)
@@ -524,6 +532,10 @@ def train_lbfgs(
         "pde": train_logs.get("pde", math.nan),
         "ic": train_logs.get("ic", math.nan),
         "bc": train_logs.get("bc", math.nan),
+        "bc_left": train_logs.get("bc_left", math.nan),
+        "bc_right": train_logs.get("bc_right", math.nan),
+        "bc_left_rmse": train_logs.get("bc_left_rmse", math.nan),
+        "bc_right_rmse": train_logs.get("bc_right_rmse", math.nan),
         "data": train_logs.get("data", math.nan),
         "grad_norm": float(grad_norm),
         "elapsed_s": elapsed_s,
@@ -531,7 +543,7 @@ def train_lbfgs(
 
     if val_batch is not None:
         _, val_logs = compute_losses_eval(
-            model, val_batch, weights, flux_mode=flux_mode, flux_cfg=flux_cfg
+            model, val_batch, weights  
         )
         row.update(
             {
@@ -539,6 +551,10 @@ def train_lbfgs(
                 "val_pde": val_logs.get("pde", math.nan),
                 "val_ic": val_logs.get("ic", math.nan),
                 "val_bc": val_logs.get("bc", math.nan),
+                "val_bc_left": val_logs.get("bc_left", math.nan),
+                "val_bc_right": val_logs.get("bc_right", math.nan),
+                "val_bc_left_rmse": val_logs.get("bc_left_rmse", math.nan),
+                "val_bc_right_rmse": val_logs.get("bc_right_rmse", math.nan),
                 "val_data": val_logs.get("data", math.nan),
             }
         )
@@ -549,7 +565,9 @@ def train_lbfgs(
 
     print(
         f"[LBFGS] done | total={row['total']:.4e} "
-        f"(pde={row['pde']:.2e}, ic={row['ic']:.2e}, bc={row['bc']:.2e}, data={row['data']:.2e}) "
+        f"(pde={row['pde']:.2e}, ic={row['ic']:.2e}, bcL={row['bc_left']:.2e}, "
+        f"bcR={row['bc_right']:.2e}, data={row['data']:.2e}) "
+        f"| bc_rmse(L={row['bc_left_rmse']:.2e}, R={row['bc_right_rmse']:.2e}) "
         f"| grad={row['grad_norm']:.2e}"
     )
     return best_path
