@@ -81,6 +81,7 @@ class LossWeights:
     w_bc_left: float = 1.0
     w_bc_right: float = 1.0
     w_data: float = 1.0
+    w_flux: float = 1.0
 
 
 @dataclass
@@ -108,6 +109,43 @@ class LeftBoundaryAnsatzMLP(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         xi = x[:, :1]
         return xi * self.base(x)
+
+
+class FluxConsistentLeftBoundaryMLP(nn.Module):
+    """Temperature network with hard left BC and an auxiliary right-flux head."""
+
+    def __init__(
+        self,
+        in_dim: int = 2,
+        hidden: Sequence[int] | int = 30,
+        layers: int = 2,
+        out_dim: int = 1,
+        flux_hidden: Sequence[int] | int | None = None,
+        flux_layers: int | None = None,
+    ):
+        super().__init__()
+        self.temperature = LeftBoundaryAnsatzMLP(
+            in_dim=in_dim,
+            hidden=hidden,
+            layers=layers,
+            out_dim=out_dim,
+        )
+        flux_in_dim = max(1, in_dim - 1)
+        self.flux_head = MLP(
+            in_dim=flux_in_dim,
+            hidden=hidden if flux_hidden is None else flux_hidden,
+            layers=max(2, layers - 1) if flux_layers is None else flux_layers,
+            out_dim=1,
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.temperature(x)
+
+    def predict_flux(self, tau: torch.Tensor, mu: Optional[torch.Tensor]) -> torch.Tensor:
+        tau_feat = tau
+        if mu is not None:
+            tau_feat = torch.cat([tau_feat, mu], dim=1)
+        return self.flux_head(tau_feat)
 
 
 def interp1d_linear(
@@ -184,6 +222,16 @@ def dtheta_dxi(
     return _grad(theta, xi, create_graph=create_graph, retain_graph=create_graph)
 
 
+def predict_flux(
+    model: nn.Module,
+    tau: torch.Tensor,
+    mu: Optional[torch.Tensor] = None,
+) -> Optional[torch.Tensor]:
+    if not hasattr(model, "predict_flux"):
+        return None
+    return model.predict_flux(tau, mu)
+
+
 def compute_losses(
     model: nn.Module,
     batch,
@@ -228,6 +276,7 @@ def compute_losses(
     loss_bc_left = torch.tensor(0.0, device=device)
     loss_bc_right = torch.tensor(0.0, device=device)
     loss_bc_flux_legacy = torch.tensor(0.0, device=device)
+    loss_flux = torch.tensor(0.0, device=device)
     if weights.w_bc != 0.0 and batch.xi_bc.numel() > 0:
         mu_bc = getattr(batch, "mu_bc", None)
         xi_bc = batch.xi_bc
@@ -265,6 +314,20 @@ def compute_losses(
                 diff_flux = theta_xi_bc[mask_flux_right] - flux_bc_target[mask_flux_right]
                 loss_bc_flux_legacy = torch.mean(diff_flux**2)
 
+        aux_flux_hat = predict_flux(model, batch.tau_bc, mu_bc)
+        if aux_flux_hat is not None:
+            mask_aux_right = torch.isclose(xi_bc, torch.ones_like(xi_bc))
+            if mask_aux_right.any():
+                theta_xi_bc = dtheta_dxi(
+                    model,
+                    batch.xi_bc[mask_aux_right],
+                    batch.tau_bc[mask_aux_right],
+                    mu_bc[mask_aux_right] if mu_bc is not None else None,
+                    create_graph=create_graph,
+                )
+                diff_aux = aux_flux_hat[mask_aux_right] - theta_xi_bc
+                loss_flux = torch.mean(diff_aux**2)
+
     loss_bc_right_total = loss_bc_right + loss_bc_flux_legacy
     loss_bc = bc_scale * (
         weights.w_bc_left * loss_bc_left
@@ -276,6 +339,7 @@ def compute_losses(
         + weights.w_ic * loss_ic
         + loss_bc
         + weights.w_data * loss_data
+        + weights.w_flux * loss_flux
     )
     if not torch.isfinite(total):
         print(f"Total loss not finite: {total.item()}")
@@ -299,6 +363,7 @@ def compute_losses(
         "bc_right_rmse": float(torch.sqrt(torch.clamp(loss_bc_right.detach(), min=0.0)).cpu().item()),
         "bc_monitor": 0.0,
         "data": float(loss_data.detach().cpu().item()),
+        "flux": float(loss_flux.detach().cpu().item()),
         "smooth": 0.0,
     }
     return total, logs

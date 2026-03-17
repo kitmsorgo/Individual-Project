@@ -374,6 +374,7 @@ def train_adam(
                 no_improve_evals = 0
                 _save_checkpoint(best_path, model)
             else:
+                print("No meaningful improvement in validation RMSE data.")
                 no_improve_evals += 1
 
             plateau = False
@@ -442,6 +443,7 @@ def train_lbfgs(
     extra_params: list[nn.Parameter] | None = None,
     log_callback: Callable[[Dict[str, float | int | str | None]], None] | None = None,
     log_every: int = 1,
+    print_every: int = 200,
     max_iter: int = 2000,
     history_size: int = 50,
     lr: float = 1.0,
@@ -466,6 +468,7 @@ def train_lbfgs(
             "lr": lr,
             "max_iter": max_iter,
             "history_size": history_size,
+            "print_every": print_every,
             "weights": asdict(weights),
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             "has_val_batch": val_batch is not None,
@@ -510,6 +513,13 @@ def train_lbfgs(
                 )
             except Exception as exc:
                 print(f"[train_lbfgs] log_callback failed: {exc}")
+        if closure_calls % max(1, int(print_every)) == 0:
+            elapsed_s = float(time.time() - t0)
+            print(
+                f"[LBFGS] closure {closure_calls} | "
+                f"loss={float(loss.detach().cpu().item()):.4e} | "
+                f"{elapsed_s:.1f}s"
+            )
         return loss
 
     print("[LBFGS] starting...")

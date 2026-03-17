@@ -1,0 +1,23 @@
+Validation with Frequency Noise and Heat-Flux Recovery
+===============================================
+Model checkpoint: c:\Users\wscm13\OneDrive - Loughborough University\Part C\IDP\Individual Project\PINN\outputs\parametric\2026_03_17_1034\hard_left_bc\2026_03_17_1034_hard_left_bc_best.pt
+Number of validation cases: 14
+Frequency noise fraction: 5.00%
+Mean temperature RMSE: 3.470501e-03
+Mean heat-flux RMSE: 3.797969e+02
+
+Per-case metrics:
+const_6000: theta_rmse=2.472417e-03, heat_flux_rmse=2.563316e+02
+const_12000: theta_rmse=2.470387e-03, heat_flux_rmse=5.126233e+02
+const_14000: theta_rmse=2.471425e-03, heat_flux_rmse=5.980829e+02
+const_20000: theta_rmse=2.470900e-03, heat_flux_rmse=8.543848e+02
+sine_A5000_T50: theta_rmse=5.145667e-03, heat_flux_rmse=2.213670e+02
+sine_A7500_T75: theta_rmse=4.569043e-03, heat_flux_rmse=2.643441e+02
+sine_A7500_T125: theta_rmse=4.137549e-03, heat_flux_rmse=1.229871e+02
+sine_A7500_T25: theta_rmse=4.364961e-03, heat_flux_rmse=2.099745e+02
+sine_A12500_T75: theta_rmse=4.569286e-03, heat_flux_rmse=4.405832e+02
+sine_A12500_T125: theta_rmse=4.137400e-03, heat_flux_rmse=2.049676e+02
+sine_A12500_T25: theta_rmse=4.362883e-03, heat_flux_rmse=3.499122e+02
+const_10000_Tleft_280: theta_rmse=2.471701e-03, heat_flux_rmse=4.271998e+02
+const_10000_Tleft_300: theta_rmse=2.471701e-03, heat_flux_rmse=4.271998e+02
+const_10000_Tleft_310: theta_rmse=2.471701e-03, heat_flux_rmse=4.271998e+02

@@ -1,0 +1,17 @@
+Validation Metrics
+==================
+total: 1.171525e-03
+pde: 1.021791e-03
+ic: 1.439808e-05
+bc: 1.170381e-04
+bc_left: 0.000000e+00
+bc_right: 1.170381e-04
+bc_left_raw: 0.000000e+00
+bc_right_raw: 1.170381e-04
+bc_flux_legacy: 0.000000e+00
+bc_left_rmse: 0.000000e+00
+bc_right_rmse: 1.081841e-02
+bc_monitor: 0.000000e+00
+data: 1.829810e-05
+smooth: 0.000000e+00
+rmse_data: 4.277628e-03
